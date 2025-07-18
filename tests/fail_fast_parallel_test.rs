@@ -45,7 +45,7 @@ async fn test_fail_fast_parallel_processing() {
     
     // Run seams with fail-fast enabled
     let output = Command::new("cargo")
-        .args(["run", "--bin", "seams", "--", "--fail-fast", "--no-progress", root_path.to_str().unwrap()])
+        .args(["run", "--bin", "seams", "--", "--fail-fast", root_path.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .unwrap();
@@ -116,7 +116,7 @@ async fn test_fail_fast_utf8_error() {
     
     // Run seams with fail-fast enabled
     let output = Command::new("cargo")
-        .args(["run", "--bin", "seams", "--", "--fail-fast", "--no-progress", root_path.to_str().unwrap()])
+        .args(["run", "--bin", "seams", "--", "--fail-fast", root_path.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .unwrap();
@@ -157,7 +157,7 @@ async fn test_without_fail_fast_continues() {
     
     // Run seams WITHOUT fail-fast
     let output = Command::new("cargo")
-        .args(["run", "--bin", "seams", "--", "--no-progress", root_path.to_str().unwrap()])
+        .args(["run", "--bin", "seams", "--", root_path.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .unwrap();
@@ -204,7 +204,7 @@ async fn test_fail_fast_sentence_detection_error() {
     
     // Test with fail-fast - all files should be processed normally
     let output = Command::new("cargo")
-        .args(["run", "--bin", "seams", "--", "--fail-fast", "--no-progress", root_path.to_str().unwrap()])
+        .args(["run", "--bin", "seams", "--", "--fail-fast", root_path.to_str().unwrap()])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .unwrap();
