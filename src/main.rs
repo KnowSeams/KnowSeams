@@ -709,7 +709,6 @@ COMMON WORKFLOWS:
   seams ./texts --overwrite-all                # Reprocess all files (ignore existing outputs)
   seams ./texts --fail-fast                    # Stop immediately on any error
   seams ./texts --quiet                        # Minimal output for scripts/automation
-  seams ./texts --no-progress                  # Disable progress bars (CI-friendly)
 
 PERFORMANCE & DEBUGGING:
   seams ./texts --stats-out benchmark.json     # Save detailed performance metrics
@@ -743,12 +742,8 @@ struct Args {
     fail_fast: bool,
     
     
-    /// Suppress console progress bars
-    #[arg(long, help = "Disable progress bars (useful for automation/CI)")]
-    no_progress: bool,
-    
     /// Quiet mode - minimal output for benchmarking
-    #[arg(long, short = 'q', help = "Suppress all non-error output (implies --no-progress)")]
+    #[arg(long, short = 'q', help = "Suppress all non-error output")]
     quiet: bool,
     
     /// Stats output file path

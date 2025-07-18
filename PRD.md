@@ -31,7 +31,7 @@ Span	(start_line, start_col, end_line, end_col)—all one-based, columns measure
 4 Functional Requirements
 
 ID	Requirement
-F-1	CLI accepts: root_dir, --overwrite_all, --fail_fast, --no_progress, --stats_out.
+F-1	CLI accepts: root_dir, --overwrite_all, --fail_fast, --quiet, --stats_out.
 F-2	Recursively locate and stream-process every *-0.txt.
 F-3	At startup, compile sentence-boundary patterns into a high-performance DFA stored in memory for all worker tasks.
 F-4	Read each file with memory-mapped I/O for optimal performance with parallel processing.
@@ -50,7 +50,7 @@ Performance	Demonstrably faster than established Python alternatives (pysbd, spa
 Scalability	Should saturate multiple cores using Tokio’s work-stealing scheduler.
 Portability	Linux (x86-64, aarch64) and Windows 10+.
 Reliability	Deterministic output; idempotent reruns.
-Observability	Structured logs (JSONLines), console progress bars (on by default), and run_stats.json.
+Observability	Structured logs (JSONLines) and run_stats.json. Progress bars not currently implemented.
 
 6 Error Handling
 	•	Log all recoverable errors with context.
@@ -61,7 +61,6 @@ Observability	Structured logs (JSONLines), console progress bars (on by default)
 seams <root_dir>
     [--overwrite_all]   # overwrite even complete aux files
     [--fail_fast]       # abort on first error
-    [--no_progress]     # suppress console progress bars
     [--stats_out <path>]# default: run_stats.json in CWD
 
 
@@ -78,7 +77,7 @@ seams <root_dir>
 Milestone	Deliverable	Target Date
 M1	CLI skeleton; file discovery; async read/write
 M2	DFA pattern compilation; integration tests
-M3	Stats aggregation; mmap mode; perf bench; progress bars
+M3	Stats aggregation; mmap mode; perf bench
 M4	Docs, CI, release v0.1
 
 10 Risks & Mitigations
@@ -105,7 +104,7 @@ Python API design TBD - see task python-api-design-strategy_54.stevejs.md for cu
 12 Open Questions
 	1.	Which concrete DSL or regex subset will define the sentence-boundary spec?
 	2.	Should stats include per-sentence length histograms? → See task sentence-metadata-statistics_55.stevejs.md
-	3.	Need coloured CLI progress bars or silent by default? → Resolved: No progress bars implemented
+	3.	Progress bars feature removed - simplifies CLI and removes unused dependency
 	4.	Future: move from DFA to PDA for cross-paragraph context?
 
 13 Open Source Publication Requirements

@@ -7,7 +7,7 @@ name = "seams-benchmarks"
 version = "0.1.0"
 description = "Python benchmarks for comparing seams sentence segmentation performance"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "pysbd>=0.3.4",
     "spacy>=3.4.0",

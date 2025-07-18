@@ -141,7 +141,7 @@ Edition	Rust 2021	Widest stable baseline; async‑await mature.
 Async runtime	Tokio 1.x	Matches PRD; ecosystem standard; IOCP/epoll under hood.
 File IO	tokio::fs & optional memmap2	Non‑blocking default; mmap for benchmark parity.
 Sentence Detection	regex-automata crate	High-performance DFA with 149.8 MiB/s throughput.
-Progress	indicatif multi‑progress bars	Ergonomic, cross‑platform; keeps users informed during long scans.
+Progress	Not implemented	Simplifies CLI and removes unused dependencies.
 Lock file	Commit Cargo.lock	Reproducible builds and tutorial consistency.
 Docs folder	/docs/ for high‑level explainers	Separates narrative docs from code comments.
 Tests	cargo test in CI	Ensures every task is validated.
