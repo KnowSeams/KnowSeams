@@ -1431,3 +1431,172 @@ fn test_external_definitive_punctuation_all_dialog_states() {
     // patterns are implemented for all dialog states (not just double quotes)
     // When implementation is complete, change this to: assert_eq!(failing_count, 0);
 }
+
+#[test]
+fn test_dialog_to_dialog_transitions_all_states() {
+    let detector = get_detector();
+    
+    // Test Dialog→Dialog transitions across ALL dialog states
+    // This test documents current bugs - only double quotes work, others don't
+    
+    // SPLIT Transitions (Dialog→Dialog + Sentence Boundary)
+    // Previous dialog ends with sentence punctuation + next starts with capital = SPLIT
+    let split_transitions = [
+        // Double quotes (KNOWN TO WORK - reference implementation)
+        ("Text \"First sentence.\" \"Second sentence.\" More.", 3, "Double quote D→D split"),
+        
+        // Single quotes (CURRENTLY BROKEN - should split but doesn't)
+        ("Text 'First sentence.' 'Second sentence.' More.", 3, "Single quote D→D split"),
+        
+        // Smart double quotes (CURRENTLY BROKEN)
+        ("Text \u{201C}First sentence.\u{201D} \u{201C}Second sentence.\u{201D} More.", 3, "Smart double quote D→D split"),
+        
+        // Smart single quotes (CURRENTLY BROKEN)
+        ("Text \u{2018}First sentence.\u{2019} \u{2018}Second sentence.\u{2019} More.", 3, "Smart single quote D→D split"),
+        
+        // Round parentheses (CURRENTLY BROKEN)
+        ("Text (This is one.)(This starts new.) More.", 3, "Round paren D→D split"),
+        
+        // Square brackets (CURRENTLY BROKEN)
+        ("Text [Previous sentence.] [New sentence starts.] More.", 3, "Square bracket D→D split"),
+        
+        // Curly braces (CURRENTLY BROKEN)
+        ("Text {Done.}{Next task.} More.", 3, "Curly brace D→D split"),
+    ];
+    
+    // CONTINUE Transitions (Dialog→Dialog + Same Sentence)
+    // No sentence punctuation + next starts with lowercase = CONTINUE
+    let continue_transitions = [
+        // Double quotes (KNOWN TO WORK - reference implementation)
+        ("Text \"first\" \"second\" more.", 1, "Double quote D→D continue"),
+        
+        // Single quotes (CURRENTLY BROKEN - should continue but doesn't)
+        ("Text 'first' 'second' more.", 1, "Single quote D→D continue"),
+        
+        // Smart double quotes (CURRENTLY BROKEN)
+        ("Text \u{201C}first\u{201D} \u{201C}second\u{201D} more.", 1, "Smart double quote D→D continue"),
+        
+        // Smart single quotes (CURRENTLY BROKEN)
+        ("Text \u{2018}first\u{2019} \u{2018}second\u{2019} more.", 1, "Smart single quote D→D continue"),
+        
+        // Round parentheses (CURRENTLY BROKEN)
+        ("Text (first)(second) more.", 1, "Round paren D→D continue"),
+        
+        // Square brackets (CURRENTLY BROKEN)
+        ("Text [item][another] more.", 1, "Square bracket D→D continue"),
+        
+        // Curly braces (CURRENTLY BROKEN)
+        ("Text {item}{another} more.", 1, "Curly brace D→D continue"),
+    ];
+    
+    // Zero-Character Separators (Brackets)
+    // Immediate transitions without space
+    let zero_char_transitions = [
+        // Round parentheses zero-char (CURRENTLY BROKEN)
+        ("Text (first)(Second) more.", 2, "Round paren D→D zero-char split"),
+        ("Text (first)(second) more.", 1, "Round paren D→D zero-char continue"),
+        
+        // Square brackets zero-char (CURRENTLY BROKEN)
+        ("Text [first][Second] more.", 2, "Square bracket D→D zero-char split"),
+        ("Text [first][second] more.", 1, "Square bracket D→D zero-char continue"),
+        
+        // Curly braces zero-char (CURRENTLY BROKEN)
+        ("Text {Done.}{Next task.} more.", 2, "Curly brace D→D zero-char split"),
+        ("Text {first}{second} more.", 1, "Curly brace D→D zero-char continue"),
+    ];
+    
+    
+    println!("=== Testing Dialog→Dialog Transitions - Split Cases ===");
+    let mut split_working = 0;
+    let split_total = split_transitions.len();
+    
+    for (text, expected, description) in split_transitions {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        
+        if sentences.len() == expected {
+            split_working += 1;
+            println!("✅ WORKING: {}: {} sentences", description, sentences.len());
+        } else {
+            println!("❌ FAILING: {}: {} sentences (expected {})", description, sentences.len(), expected);
+            println!("  Text: '{}'", text);
+            for (i, sentence) in sentences.iter().enumerate() {
+                println!("    {}: '{}'", i + 1, sentence.normalize().trim());
+            }
+        }
+    }
+    
+    println!("\n=== Testing Dialog→Dialog Transitions - Continue Cases ===");
+    let mut continue_working = 0;
+    let continue_total = continue_transitions.len();
+    
+    for (text, expected, description) in continue_transitions {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        
+        if sentences.len() == expected {
+            continue_working += 1;
+            println!("✅ WORKING: {}: {} sentences", description, sentences.len());
+        } else {
+            println!("❌ FAILING: {}: {} sentences (expected {})", description, sentences.len(), expected);
+            println!("  Text: '{}'", text);
+            for (i, sentence) in sentences.iter().enumerate() {
+                println!("    {}: '{}'", i + 1, sentence.normalize().trim());
+            }
+        }
+    }
+    
+    println!("\n=== Testing Zero-Character Separators ===");
+    let mut zero_char_working = 0;
+    let zero_char_total = zero_char_transitions.len();
+    
+    for (text, expected, description) in zero_char_transitions {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        
+        if sentences.len() == expected {
+            zero_char_working += 1;
+            println!("✅ WORKING: {}: {} sentences", description, sentences.len());
+        } else {
+            println!("❌ FAILING: {}: {} sentences (expected {})", description, sentences.len(), expected);
+            println!("  Text: '{}'", text);
+            for (i, sentence) in sentences.iter().enumerate() {
+                println!("    {}: '{}'", i + 1, sentence.normalize().trim());
+            }
+        }
+    }
+    
+    println!("\n=== SUMMARY: Dialog→Dialog Transition Bug Documentation ===");
+    println!("Split transitions: {}/{} working", split_working, split_total);
+    println!("Continue transitions: {}/{} working", continue_working, continue_total);
+    println!("Zero-char transitions: {}/{} working", zero_char_working, zero_char_total);
+    
+    let total_working = split_working + continue_working + zero_char_working;
+    let total_tests = split_total + continue_total + zero_char_total;
+    
+    println!("OVERALL: {}/{} D→D transitions working", total_working, total_tests);
+    
+    if total_working == 1 {  // Only double quotes should work initially
+        println!("✅ Bug confirmed: Only double quotes support D→D transitions");
+        println!("❌ Missing: Single quotes, smart quotes, parentheses, brackets, braces");
+    } else if total_working == total_tests {
+        println!("✅ All dialog states support D→D transitions!");
+    } else {
+        println!("🔨 Partial implementation: {}/{} dialog states working", 
+                total_working / 4, 7);  // Rough estimate
+    }
+    
+    // NOTE: This test initially FAILS to demonstrate the bug
+    // When Dialog→Dialog transitions are implemented for all states, 
+    // most of these should pass
+    
+    // FAILING ASSERTIONS - These document the current bugs by failing
+    assert_eq!(split_working, split_total, 
+        "BUG: Only {}/{} split transitions work - missing D→D patterns for non-double-quote dialog states", 
+        split_working, split_total);
+    
+    assert_eq!(continue_working, continue_total,
+        "BUG: Only {}/{} continue transitions work - missing D→D patterns for non-double-quote dialog states",
+        continue_working, continue_total);
+    
+    assert_eq!(zero_char_working, zero_char_total,
+        "BUG: Only {}/{} zero-char transitions work - missing zero-character separator patterns",
+        zero_char_working, zero_char_total);
+}
