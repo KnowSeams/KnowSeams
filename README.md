@@ -65,14 +65,17 @@ For complete benchmark methodology and comparison tools, see [benchmarks/](bench
 
 ### Installation
 
-**From source:**
+**From crates.io:**
 ```bash
-git clone <repository-url>
-cd guten_split
-cargo install --path .
+cargo install seams
 ```
 
-*Note: This crate is not yet published to crates.io*
+**From source:**
+```bash
+git clone https://github.com/KnowSeams/KnowSeams.git
+cd KnowSeams
+cargo install --path .
+```
 
 ### Basic Usage
 
