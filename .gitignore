@@ -28,3 +28,4 @@ tests/generated_boundary_tests.json
 
 # benchmark result files
 *_stats.json
+*_comparison.json

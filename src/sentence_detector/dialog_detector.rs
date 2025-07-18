@@ -494,6 +494,13 @@ impl DialogStateMachine {
         let dialog_double_to_dialog_hard = format!("{double_quote_close}({soft_separator}){dialog_open_chars}{non_dialog_sentence_start_chars}");  // " (The
         let dialog_double_to_dialog_soft = format!("{double_quote_close}({soft_separator}){dialog_open_chars}{not_non_dialog_sentence_start_chars}");  // " (note
         
+        // EXTERNAL DEFINITIVE PUNCTUATION PATTERNS: Handle definitive punctuation after close
+        // WHY: Dialog close chars never appear in abbreviations, so external periods need no abbreviation check
+        // Pattern: close + definitive_punct + space + capital → Split (external definitive + case signals split)
+        let dialog_double_external_hard_end = format!("{double_quote_close}[.!?]({soft_separator}){non_dialog_sentence_start_chars}");  // "! The, "? The, ". The
+        // Pattern: close + definitive_punct + space + lowercase → Continue (external definitive but lowercase overrides)
+        let dialog_double_external_soft_end = format!("{double_quote_close}[.!?]({soft_separator}){not_all_sentence_start_chars}");  // "! the, "? the, ". the
+        
         // CONTINUATION PUNCTUATION PATTERNS: Handle continuation punctuation before and after close
         // Pattern: continuation_punct + close + space + any → Continue (before close)
         let dialog_double_continuation_before_end = format!("{non_sentence_ending_punct}{double_quote_close}({soft_separator}){unified_sentence_start_chars}");  // ," The
@@ -593,10 +600,12 @@ impl DialogStateMachine {
             dialog_double_to_dialog_soft.as_str(),        // PatternID 4 = Dialog->Dialog WITHOUT sentence boundary (e.g., " (note)
             dialog_hard_double_end.as_str(),              // PatternID 5 = punctuated sentence boundary
             dialog_soft_double_end.as_str(),              // PatternID 6 = punctuated continue sentence
-            dialog_double_continuation_before_end.as_str(), // PatternID 7 = continuation punct before close → Continue
-            dialog_double_continuation_after_end.as_str(), // PatternID 8 = continuation punct after close → Continue
-            dialog_double_unpunctuated_split_end.as_str(), // PatternID 9 = unpunctuated sentence boundary  
-            dialog_double_unpunctuated_continue_end.as_str(), // PatternID 10 = unpunctuated continue sentence
+            dialog_double_external_hard_end.as_str(),     // PatternID 7 = external definitive punct + capital → Split
+            dialog_double_external_soft_end.as_str(),     // PatternID 8 = external definitive punct + lowercase → Continue
+            dialog_double_continuation_before_end.as_str(), // PatternID 9 = continuation punct before close → Continue
+            dialog_double_continuation_after_end.as_str(), // PatternID 10 = continuation punct after close → Continue
+            dialog_double_unpunctuated_split_end.as_str(), // PatternID 11 = unpunctuated sentence boundary  
+            dialog_double_unpunctuated_continue_end.as_str(), // PatternID 12 = unpunctuated continue sentence
         ];
         let dialog_double_mappings = vec![
             (MatchType::HardSeparator, DialogState::Unknown),        // PatternID 0 - hard sep + dialog opener
@@ -606,10 +615,12 @@ impl DialogStateMachine {
             (MatchType::DialogOpen, DialogState::Unknown),           // PatternID 4 - Dialog->Dialog soft transition (determine target state from consumed char)
             (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 5 - punctuated hard dialog end
             (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 6 - punctuated soft dialog end
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 7 - continuation punct before close → Continue
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 8 - continuation punct after close → Continue
-            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 9 - unpunctuated sentence boundary  
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 10 - unpunctuated continue sentence
+            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 7 - external definitive punct + capital → Split
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 8 - external definitive punct + lowercase → Continue
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 9 - continuation punct before close → Continue
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 10 - continuation punct after close → Continue
+            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 11 - unpunctuated sentence boundary  
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 12 - unpunctuated continue sentence
         ];
         state_patterns.insert(DialogState::DialogDoubleQuote, Regex::new_many(&dialog_double_patterns)?);
         state_pattern_mappings.insert(DialogState::DialogDoubleQuote, dialog_double_mappings);
@@ -617,6 +628,13 @@ impl DialogStateMachine {
         // DIALOG SINGLE QUOTE STATE - Similar structure
         let dialog_hard_single_end = format!("{sentence_end_punct}{single_quote_close}({soft_separator}){unified_sentence_start_chars}");  // .' The or .' (
         let dialog_soft_single_end = format!("{sentence_end_punct}{single_quote_close}({soft_separator}){not_all_sentence_start_chars}");  // .' the
+        
+        // EXTERNAL DEFINITIVE PUNCTUATION PATTERNS for single quotes: Handle definitive punctuation after close
+        // WHY: Dialog close chars never appear in abbreviations, so external periods need no abbreviation check
+        // Pattern: close + definitive_punct + space + capital → Split (external definitive + case signals split)
+        let dialog_single_external_hard_end = format!("{single_quote_close}[.!?]({soft_separator}){non_dialog_sentence_start_chars}");  // '! The, '? The, '. The
+        // Pattern: close + definitive_punct + space + lowercase → Continue (external definitive but lowercase overrides)
+        let dialog_single_external_soft_end = format!("{single_quote_close}[.!?]({soft_separator}){not_all_sentence_start_chars}");  // '! the, '? the, '. the
         
         // CONTINUATION PUNCTUATION PATTERNS for single quotes
         let dialog_single_continuation_before_end = format!("{non_sentence_ending_punct}{single_quote_close}({soft_separator}){unified_sentence_start_chars}");  // ,' The
@@ -632,10 +650,12 @@ impl DialogStateMachine {
             hard_sep_eof.as_str(),                        // PatternID 2 = hard sep + EOF
             dialog_hard_single_end.as_str(),              // PatternID 3 = punctuated sentence boundary
             dialog_soft_single_end.as_str(),              // PatternID 4 = punctuated continue sentence
-            dialog_single_continuation_before_end.as_str(), // PatternID 5 = continuation punct before close → Continue
-            dialog_single_continuation_after_end.as_str(), // PatternID 6 = continuation punct after close → Continue
-            dialog_single_unpunctuated_split_end.as_str(), // PatternID 7 = unpunctuated sentence boundary
-            dialog_single_unpunctuated_continue_end.as_str(), // PatternID 8 = unpunctuated continue sentence
+            dialog_single_external_hard_end.as_str(),     // PatternID 5 = external definitive punct + capital → Split
+            dialog_single_external_soft_end.as_str(),     // PatternID 6 = external definitive punct + lowercase → Continue
+            dialog_single_continuation_before_end.as_str(), // PatternID 7 = continuation punct before close → Continue
+            dialog_single_continuation_after_end.as_str(), // PatternID 8 = continuation punct after close → Continue
+            dialog_single_unpunctuated_split_end.as_str(), // PatternID 9 = unpunctuated sentence boundary
+            dialog_single_unpunctuated_continue_end.as_str(), // PatternID 10 = unpunctuated continue sentence
         ];
         let dialog_single_mappings = vec![
             (MatchType::HardSeparator, DialogState::Unknown),        // PatternID 0 - hard sep + dialog opener
@@ -643,10 +663,12 @@ impl DialogStateMachine {
             (MatchType::HardSeparator, DialogState::Narrative),      // PatternID 2 - hard sep + EOF
             (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 3 - punctuated hard dialog end
             (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 4 - punctuated soft dialog end
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 5 - continuation punct before close → Continue
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 6 - continuation punct after close → Continue
-            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 7 - unpunctuated sentence boundary
-            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 8 - unpunctuated continue sentence
+            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 5 - external definitive punct + capital → Split
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 6 - external definitive punct + lowercase → Continue
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 7 - continuation punct before close → Continue
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 8 - continuation punct after close → Continue
+            (MatchType::DialogEnd, DialogState::Narrative),          // PatternID 9 - unpunctuated sentence boundary
+            (MatchType::DialogSoftEnd, DialogState::Narrative),      // PatternID 10 - unpunctuated continue sentence
         ];
         state_patterns.insert(DialogState::DialogSingleQuote, Regex::new_many(&dialog_single_patterns)?);
         state_pattern_mappings.insert(DialogState::DialogSingleQuote, dialog_single_mappings);

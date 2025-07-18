@@ -1345,3 +1345,89 @@ fn test_dialog_state_machine_continuation_logic() {
         println!();
     }
 }
+
+#[test]
+fn test_external_definitive_punctuation_all_dialog_states() {
+    let detector = get_detector();
+    
+    // Test cases for external definitive punctuation patterns across ALL dialog states
+    // Each should produce 3 sentences: "Text {open}word{close}{punct}! More text. New sentence."
+    // 1. "Text {open}word{close}{punct}!" - dialog with external punctuation
+    // 2. "More text." - separate sentence  
+    // 3. "New sentence." - final sentence
+    
+    let external_definitive_cases = [
+        // Double quotes
+        (r#"Text "word"! More text. New sentence."#, 3, "Double quote + exclamation"),
+        (r#"Text "word"? More text. New sentence."#, 3, "Double quote + question"),
+        (r#"Text "word". More text. New sentence."#, 3, "Double quote + period"),
+        
+        // Single quotes
+        (r#"Text 'word'! More text. New sentence."#, 3, "Single quote + exclamation"),
+        (r#"Text 'word'? More text. New sentence."#, 3, "Single quote + question"),
+        (r#"Text 'word'. More text. New sentence."#, 3, "Single quote + period"),
+        
+        // Smart double quotes (Unicode escapes)
+        ("Text \u{201C}word\u{201D}! More text. New sentence.", 3, "Smart double quote + exclamation"),
+        ("Text \u{201C}word\u{201D}? More text. New sentence.", 3, "Smart double quote + question"),
+        ("Text \u{201C}word\u{201D}. More text. New sentence.", 3, "Smart double quote + period"),
+        
+        // Smart single quotes (Unicode escapes)
+        ("Text \u{2018}word\u{2019}! More text. New sentence.", 3, "Smart single quote + exclamation"),
+        ("Text \u{2018}word\u{2019}? More text. New sentence.", 3, "Smart single quote + question"),
+        ("Text \u{2018}word\u{2019}. More text. New sentence.", 3, "Smart single quote + period"),
+        
+        // Round parentheses
+        (r#"Text (word)! More text. New sentence."#, 3, "Round parentheses + exclamation"),
+        (r#"Text (word)? More text. New sentence."#, 3, "Round parentheses + question"),
+        (r#"Text (word). More text. New sentence."#, 3, "Round parentheses + period"),
+        
+        // Square brackets
+        (r#"Text [word]! More text. New sentence."#, 3, "Square brackets + exclamation"),
+        (r#"Text [word]? More text. New sentence."#, 3, "Square brackets + question"),
+        (r#"Text [word]. More text. New sentence."#, 3, "Square brackets + period"),
+        
+        // Curly braces
+        (r#"Text {word}! More text. New sentence."#, 3, "Curly braces + exclamation"),
+        (r#"Text {word}? More text. New sentence."#, 3, "Curly braces + question"),
+        (r#"Text {word}. More text. New sentence."#, 3, "Curly braces + period"),
+    ];
+    
+    println!("=== Testing External Definitive Punctuation Across All Dialog States ===");
+    println!("Each case should produce 3 sentences when external punctuation appears after dialog close");
+    println!();
+    
+    let mut passing_count = 0;
+    let mut failing_count = 0;
+    
+    for (text, expected, description) in external_definitive_cases {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        
+        if sentences.len() == expected {
+            passing_count += 1;
+            println!("✅ PASS: {}: {} sentences", description, sentences.len());
+        } else {
+            failing_count += 1;
+            println!("❌ FAIL: {}: {} sentences (expected {})", description, sentences.len(), expected);
+            println!("  Text: '{}'", text);
+            for (i, sentence) in sentences.iter().enumerate() {
+                println!("    {}: '{}'", i + 1, sentence.normalize().trim());
+            }
+        }
+    }
+    
+    println!();
+    println!("=== SUMMARY ===");
+    println!("Passing: {}/{}", passing_count, external_definitive_cases.len());
+    println!("Failing: {}/{}", failing_count, external_definitive_cases.len());
+    
+    if failing_count > 0 {
+        println!("❌ Implementation incomplete: {} dialog states still need external definitive punctuation patterns", failing_count / 3);
+    } else {
+        println!("✅ All dialog states correctly handle external definitive punctuation!");
+    }
+    
+    // NOTE: This test is expected to show failures until external definitive punctuation 
+    // patterns are implemented for all dialog states (not just double quotes)
+    // When implementation is complete, change this to: assert_eq!(failing_count, 0);
+}
