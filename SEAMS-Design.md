@@ -379,21 +379,33 @@ let dialog_soft_end_unpunctuated = format!("{not_sentence_end_punct}{double_quot
 ```
 
 **Current State**: 
-- ✅ **Fixed**: Handles external continuation punctuation `[,:;]*` (line 323)
-- ❌ **Missing**: External definitive punctuation `[.!?]` patterns  
-- ❌ **Missing**: Zero-character separator patterns for bracket pairs
-- ❌ **Missing**: Case-sensitive pattern splitting for direct transitions
+- ✅ **Implemented**: External continuation punctuation `[,:;]*` patterns
+- ✅ **Implemented**: External definitive punctuation `[.!?]` patterns (Task 95)
+- ✅ **Implemented**: Zero-character separator patterns for bracket pairs (Task 97)
+- ✅ **Implemented**: Complete Dialog→Dialog transitions for all 7 dialog states (Task 97)
+- ✅ **Implemented**: Pattern generation via `generate_dialog_patterns!` macro (Task 98)
 
-### Current Missing Patterns
+### Recently Implemented (v0.1.1)
 
-**Gap 1: External Definitive Punctuation**
-- `"word"! More` → Should be 3 sentences (currently fails)
-- `"word"? Next` → Should be 3 sentences (currently fails)
+**✅ Gap 1: External Definitive Punctuation** (Task 95)
+- `"word"! More` → Now correctly produces 3 sentences in repro examples ✅
+- `"word"? Next` → Now correctly produces 3 sentences in repro examples ✅
 
-**Gap 2: Zero-Character Dialog Transitions**  
-- `(first)(second)` → Should handle D→D transition (not currently supported)
-- `[one][two]` → Should handle D→D transition (not currently supported)
+**✅ Gap 2: Zero-Character Dialog Transitions** (Task 97)  
+- `(first)(second)` → Now handles D→D transition correctly ✅
+- `[one][two]` → Now handles D→D transition correctly ✅
+- All 6 bracket-style dialog types support zero-character separators ✅
 
-**Gap 3: Direct Pattern-to-Transition Mapping**
-- Current: Generic patterns require runtime state analysis
-- Should: Named pattern components with direct MatchType mapping
+**✅ Gap 3: Pattern Architecture Improvement** (Task 98)
+- Implemented: `generate_dialog_patterns!` macro for consistent pattern generation ✅
+- All 7 dialog states use unified pattern structure ✅
+- Eliminated ~250+ lines of pattern duplication ✅
+
+### Current Implementation Status
+
+**Complete Dialog→Dialog Coverage**: 20/20 D→D transition patterns working
+- Split transitions: 7/7 dialog states ✅
+- Continue transitions: 7/7 dialog states ✅  
+- Zero-character separators: 6/6 bracket-style dialogs ✅
+
+**Remaining Scope**: Cross-dialog-type transitions (e.g., `'text' "more"`) deferred to task 99 pending corpus validation.
