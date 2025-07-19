@@ -409,3 +409,7 @@ let dialog_soft_end_unpunctuated = format!("{not_sentence_end_punct}{double_quot
 - Zero-character separators: 6/6 bracket-style dialogs ✅
 
 **Remaining Scope**: Cross-dialog-type transitions (e.g., `'text' "more"`) deferred to task 99 pending corpus validation.
+
+### Implementation Visualization
+
+For a visual representation of the complete dialog state machine with all transitions, see [docs/dialog-state-machine.md](docs/dialog-state-machine.md).

@@ -187,6 +187,8 @@ Performance scales with available CPU cores and I/O bandwidth. Actual throughput
 
 For detailed design documentation, see [SEAMS-Design.md](SEAMS-Design.md).
 
+For the dialog state machine implementation details, see [docs/dialog-state-machine.md](docs/dialog-state-machine.md).
+
 ## License
 
 MIT License - see LICENSE file for details.
