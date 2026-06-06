@@ -6,8 +6,14 @@ pub mod restart_log;
 
 // Re-export main types for convenient access
 pub use sentence_detector::{
-    DetectedSentenceBorrowed, 
+    DetectedSentenceBorrowed,
     Span
+};
+
+// Re-export primary entry point and debug output type for library consumers
+pub use sentence_detector::dialog_detector::{
+    SentenceDetectorDialog,
+    DebugTransitionInfo,
 };
 
 // Re-export incremental processing utilities
