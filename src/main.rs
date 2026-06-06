@@ -465,18 +465,6 @@ async fn process_single_file_mode(
         );
     }
     
-    // Check if it matches the *-0.txt pattern
-    let file_name = file_path.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
-    
-    if !file_name.ends_with("-0.txt") {
-        anyhow::bail!(
-            "File does not match expected pattern: {}\n\nSUGGESTIONS:\n• Seams processes Project Gutenberg files ending in '-0.txt'\n• Example valid filenames: 'pg1234-0.txt', 'alice-0.txt'\n• If this is the correct file, rename it to match the pattern",
-            file_path.display()
-        );
-    }
-    
     if !args.quiet {
         println!("seams v{} - Processing single file", env!("CARGO_PKG_VERSION"));
         println!("File: {}", file_path.display());
@@ -777,10 +765,12 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // WHY: structured JSON logging enables observability and debugging in production
+    // WHY: write structured logs to stderr so stdout stays clean for downstream
+    // consumers (scripts, pipes). Defaulting to stdout mixed logs with output.
     tracing_subscriber::fmt()
         .with_target(false)
         .json()
+        .with_writer(std::io::stderr)
         .init();
     
     let args = Args::parse();
