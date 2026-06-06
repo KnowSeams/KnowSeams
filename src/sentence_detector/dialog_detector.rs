@@ -172,6 +172,7 @@ pub enum DialogState {
     DialogParenthheticalRound,
     DialogParenthheticalSquare,
     DialogParenthheticalCurly,
+    DialogGuillemet,
     Unknown,
 }
 
@@ -229,15 +230,15 @@ impl DialogStateMachine {
     fn get_pattern_name(&self, state: &DialogState, pattern_id: usize) -> String {
         match state {
             DialogState::Narrative => match pattern_id {
-                0..=6 => format!("NarrativeToDialog[{pattern_id}]"),
-                7..=13 => format!("DialogOpen[{}]", pattern_id - 7),
-                14..=20 => format!("IndependentDialog[{}]", pattern_id - 14),
-                21 => "NarrativeLineBoundary".to_string(),
-                22 => "NarrativeSentenceBoundary".to_string(),
-                23 => "NarrativeHardBoundary".to_string(),
-                24 => "HardSepDialogStart".to_string(),
-                25 => "HardSepNarrativeStart".to_string(),
-                26 => "HardSepEOF".to_string(),
+                0..=7 => format!("NarrativeToDialog[{pattern_id}]"),
+                8..=15 => format!("DialogOpen[{}]", pattern_id - 8),
+                16..=23 => format!("IndependentDialog[{}]", pattern_id - 16),
+                24 => "NarrativeLineBoundary".to_string(),
+                25 => "NarrativeSentenceBoundary".to_string(),
+                26 => "NarrativeHardBoundary".to_string(),
+                27 => "HardSepDialogStart".to_string(),
+                28 => "HardSepNarrativeStart".to_string(),
+                29 => "HardSepEOF".to_string(),
                 _ => format!("Unknown[{pattern_id}]"),
             },
             DialogState::DialogDoubleQuote => match pattern_id {
@@ -258,7 +259,8 @@ impl DialogStateMachine {
             DialogState::DialogSmartDoubleOpen |
             DialogState::DialogSmartSingleOpen |
             DialogState::DialogParenthheticalSquare |
-            DialogState::DialogParenthheticalCurly => match pattern_id {
+            DialogState::DialogParenthheticalCurly |
+            DialogState::DialogGuillemet => match pattern_id {
                 0 => "HardSepDialogStart".to_string(),
                 1 => "HardSepNarrativeStart".to_string(),
                 2 => "HardSepEOF".to_string(),
@@ -309,6 +311,8 @@ impl DialogStateMachine {
                 '\u{201C}' => DialogState::DialogSmartDoubleOpen,
                 // Smart single open quote
                 '\u{2018}' => DialogState::DialogSmartSingleOpen,
+                // Opening guillemet
+                '\u{00AB}' => DialogState::DialogGuillemet,
                 // Everything else -> Narrative
                 _ => DialogState::Narrative,
             }
@@ -373,8 +377,8 @@ impl DialogStateMachine {
                             // Terminal punctuation - allow hard separator
                             '.' | '?' | '!' => return false,
                             
-                            // Smart closing quotes - accept hard separator (they are terminal)
-                            '\u{201D}' | '\u{2019}' => return false,
+                            // Smart closing quotes and guillemet close - accept hard separator (they are terminal)
+                            '\u{201D}' | '\u{2019}' | '\u{00BB}' => return false,
                             
                             // Internal punctuation (em/en dash, smart opening quotes) - reject separator
                             '\u{2014}' | '\u{2013}' | '\u{201C}' | '\u{2018}' => return true,
@@ -413,7 +417,7 @@ impl DialogStateMachine {
         
         // SOLUTION: Split sentence start chars to prevent overlaps
         let non_dialog_sentence_start_chars = r"[A-Z]";  // Only capital letters for narrative boundaries
-        let dialog_open_chars = r"[\x22\x27\u{201C}\u{2018}\(\[\{]";  // All dialog opening characters
+        let dialog_open_chars = r"[\x22\x27\u{201C}\u{2018}\(\[\{\u{00AB}]";  // All dialog opening characters
         
         let dialog_prefix_whitespace = r"[ \t\n]";  // Space, tab, or newline
         
@@ -430,7 +434,8 @@ impl DialogStateMachine {
         let round_paren_open = r"\(";            // (
         let square_bracket_open = r"\[";         // [
         let curly_brace_open = r"\{";            // {
-        
+        let guillemet_open = r"\u{00AB}";        // «
+
         // N→N narrative sentence boundaries
         let narrative_sentence_boundary = format!("{sentence_ending_punct}({soft_separator}){non_dialog_sentence_start_chars}");
         let narrative_line_boundary = format!("{sentence_ending_punct}{line_boundary}{non_dialog_sentence_start_chars}");
@@ -444,7 +449,8 @@ impl DialogStateMachine {
         let narrative_to_round_paren_boundary = format!("{sentence_ending_punct}({soft_separator}){round_paren_open}");
         let narrative_to_square_bracket_boundary = format!("{sentence_ending_punct}({soft_separator}){square_bracket_open}");
         let narrative_to_curly_brace_boundary = format!("{sentence_ending_punct}({soft_separator}){curly_brace_open}");
-        
+        let narrative_to_guillemet_boundary = format!("{sentence_ending_punct}({soft_separator}){guillemet_open}");
+
         // N→D transitions WITHOUT sentence boundary (non-sentence punct + space + specific dialog char)
         let narrative_to_double_quote_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){double_quote_char}");
         let narrative_to_single_quote_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){single_quote_char}");
@@ -453,7 +459,8 @@ impl DialogStateMachine {
         let narrative_to_round_paren_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){round_paren_open}");
         let narrative_to_square_bracket_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){square_bracket_open}");
         let narrative_to_curly_brace_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){curly_brace_open}");
-        
+        let narrative_to_guillemet_no_boundary = format!("{non_sentence_ending_punct}({soft_separator}){guillemet_open}");
+
         // Independent dialog starts (whitespace + dialog char, not after punctuation)
         let double_quote_independent = format!("{dialog_prefix_whitespace}{double_quote_char}");
         let single_quote_independent = format!("{dialog_prefix_whitespace}{single_quote_char}");
@@ -462,7 +469,8 @@ impl DialogStateMachine {
         let round_paren_independent = format!("{dialog_prefix_whitespace}{round_paren_open}");
         let square_bracket_independent = format!("{dialog_prefix_whitespace}{square_bracket_open}");
         let curly_brace_independent = format!("{dialog_prefix_whitespace}{curly_brace_open}");
-        
+        let guillemet_independent = format!("{dialog_prefix_whitespace}{guillemet_open}");
+
         // Hard separator patterns that consume next character to avoid off-by-one error
         let not_dialog_open_chars = Self::negate_char_class(dialog_open_chars);
         let hard_sep_dialog_start = format!("{hard_separator}[{dialog_open_chars}]");
@@ -478,12 +486,15 @@ impl DialogStateMachine {
         let round_paren_close = r"\)";         // )
         let square_bracket_close = r"\]";      // ]
         let curly_brace_close = r"\}";         // }
-        
-        
+        // WHY: Optional preceding space handles French typographic convention « text »
+        // where a non-breaking or regular space appears before the closing guillemet.
+        let guillemet_close = r"[ \u{00A0}]?\u{00BB}";  // (space?) »
+
+
         // Dialog ending patterns: HARD_END (sentence boundary) vs SOFT_END (continue sentence)
         // Create unified character class by merging the character sets (not using | operator)
-        let unified_sentence_start_chars = "[A-Z\\x22\\x27\\u{201C}\\u{2018}\\(\\[\\{]".to_string();
-        let not_all_sentence_start_chars = "[^A-Z\\x22\\x27\\u{201C}\\u{2018}\\(\\[\\{]".to_string();
+        let unified_sentence_start_chars = "[A-Z\\x22\\x27\\u{201C}\\u{2018}\\(\\[\\{\\u{00AB}]".to_string();
+        let not_all_sentence_start_chars = "[^A-Z\\x22\\x27\\u{201C}\\u{2018}\\(\\[\\{\\u{00AB}]".to_string();
         
         // Character class negation for D→D transitions
         let not_non_dialog_sentence_start_chars = Self::negate_char_class(non_dialog_sentence_start_chars);
@@ -605,34 +616,37 @@ impl DialogStateMachine {
             narrative_to_round_paren_boundary.as_str(),        // PatternID 4
             narrative_to_square_bracket_boundary.as_str(),     // PatternID 5
             narrative_to_curly_brace_boundary.as_str(),        // PatternID 6
-            
+            narrative_to_guillemet_boundary.as_str(),          // PatternID 7
+
             // N→D without sentence boundary (continue current sentence)
-            narrative_to_double_quote_no_boundary.as_str(),    // PatternID 7
-            narrative_to_single_quote_no_boundary.as_str(),    // PatternID 8
-            narrative_to_smart_double_no_boundary.as_str(),    // PatternID 9
-            narrative_to_smart_single_no_boundary.as_str(),    // PatternID 10
-            narrative_to_round_paren_no_boundary.as_str(),     // PatternID 11
-            narrative_to_square_bracket_no_boundary.as_str(),  // PatternID 12
-            narrative_to_curly_brace_no_boundary.as_str(),     // PatternID 13
-            
+            narrative_to_double_quote_no_boundary.as_str(),    // PatternID 8
+            narrative_to_single_quote_no_boundary.as_str(),    // PatternID 9
+            narrative_to_smart_double_no_boundary.as_str(),    // PatternID 10
+            narrative_to_smart_single_no_boundary.as_str(),    // PatternID 11
+            narrative_to_round_paren_no_boundary.as_str(),     // PatternID 12
+            narrative_to_square_bracket_no_boundary.as_str(),  // PatternID 13
+            narrative_to_curly_brace_no_boundary.as_str(),     // PatternID 14
+            narrative_to_guillemet_no_boundary.as_str(),       // PatternID 15
+
             // Independent dialog starts
-            double_quote_independent.as_str(),                 // PatternID 14
-            single_quote_independent.as_str(),                 // PatternID 15
-            smart_double_independent.as_str(),                 // PatternID 16
-            smart_single_independent.as_str(),                 // PatternID 17
-            round_paren_independent.as_str(),                  // PatternID 18
-            square_bracket_independent.as_str(),               // PatternID 19
-            curly_brace_independent.as_str(),                  // PatternID 20
-            
+            double_quote_independent.as_str(),                 // PatternID 16
+            single_quote_independent.as_str(),                 // PatternID 17
+            smart_double_independent.as_str(),                 // PatternID 18
+            smart_single_independent.as_str(),                 // PatternID 19
+            round_paren_independent.as_str(),                  // PatternID 20
+            square_bracket_independent.as_str(),               // PatternID 21
+            curly_brace_independent.as_str(),                  // PatternID 22
+            guillemet_independent.as_str(),                    // PatternID 23
+
             // N→N narrative boundaries
-            narrative_line_boundary.as_str(),                  // PatternID 21
-            narrative_sentence_boundary.as_str(),              // PatternID 22
-            narrative_hard_boundary.as_str(),                  // PatternID 23
-            
+            narrative_line_boundary.as_str(),                  // PatternID 24
+            narrative_sentence_boundary.as_str(),              // PatternID 25
+            narrative_hard_boundary.as_str(),                  // PatternID 26
+
             // Hard separator patterns (consume next character to avoid off-by-one)
-            hard_sep_dialog_start.as_str(),                   // PatternID 24
-            hard_sep_narrative_start.as_str(),                // PatternID 25  
-            hard_sep_eof.as_str(),                            // PatternID 26
+            hard_sep_dialog_start.as_str(),                   // PatternID 27
+            hard_sep_narrative_start.as_str(),                // PatternID 28
+            hard_sep_eof.as_str(),                            // PatternID 29
         ];
         let narrative_mappings = vec![
             // N→D with sentence boundary (create sentence break + enter dialog)
@@ -643,34 +657,37 @@ impl DialogStateMachine {
             (MatchType::NarrativeToDialog, DialogState::DialogParenthheticalRound), // PatternID 4
             (MatchType::NarrativeToDialog, DialogState::DialogParenthheticalSquare), // PatternID 5
             (MatchType::NarrativeToDialog, DialogState::DialogParenthheticalCurly), // PatternID 6
-            
+            (MatchType::NarrativeToDialog, DialogState::DialogGuillemet),         // PatternID 7
+
             // N→D without sentence boundary (continue sentence + enter dialog)
-            (MatchType::DialogOpen, DialogState::DialogDoubleQuote),              // PatternID 7
-            (MatchType::DialogOpen, DialogState::DialogSingleQuote),              // PatternID 8
-            (MatchType::DialogOpen, DialogState::DialogSmartDoubleOpen),          // PatternID 9
-            (MatchType::DialogOpen, DialogState::DialogSmartSingleOpen),          // PatternID 10
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalRound),      // PatternID 11
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalSquare),     // PatternID 12
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalCurly),      // PatternID 13
-            
+            (MatchType::DialogOpen, DialogState::DialogDoubleQuote),              // PatternID 8
+            (MatchType::DialogOpen, DialogState::DialogSingleQuote),              // PatternID 9
+            (MatchType::DialogOpen, DialogState::DialogSmartDoubleOpen),          // PatternID 10
+            (MatchType::DialogOpen, DialogState::DialogSmartSingleOpen),          // PatternID 11
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalRound),      // PatternID 12
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalSquare),     // PatternID 13
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalCurly),      // PatternID 14
+            (MatchType::DialogOpen, DialogState::DialogGuillemet),                // PatternID 15
+
             // Independent dialog starts (enter dialog)
-            (MatchType::DialogOpen, DialogState::DialogDoubleQuote),              // PatternID 14
-            (MatchType::DialogOpen, DialogState::DialogSingleQuote),              // PatternID 15
-            (MatchType::DialogOpen, DialogState::DialogSmartDoubleOpen),          // PatternID 16
-            (MatchType::DialogOpen, DialogState::DialogSmartSingleOpen),          // PatternID 17
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalRound),      // PatternID 18
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalSquare),     // PatternID 19
-            (MatchType::DialogOpen, DialogState::DialogParenthheticalCurly),      // PatternID 20
-            
+            (MatchType::DialogOpen, DialogState::DialogDoubleQuote),              // PatternID 16
+            (MatchType::DialogOpen, DialogState::DialogSingleQuote),              // PatternID 17
+            (MatchType::DialogOpen, DialogState::DialogSmartDoubleOpen),          // PatternID 18
+            (MatchType::DialogOpen, DialogState::DialogSmartSingleOpen),          // PatternID 19
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalRound),      // PatternID 20
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalSquare),     // PatternID 21
+            (MatchType::DialogOpen, DialogState::DialogParenthheticalCurly),      // PatternID 22
+            (MatchType::DialogOpen, DialogState::DialogGuillemet),                // PatternID 23
+
             // N→N narrative boundaries (stay in narrative)
-            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 21
-            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 22
-            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 23
-            
+            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 24
+            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 25
+            (MatchType::NarrativeGestureBoundary, DialogState::Narrative),        // PatternID 26
+
             // Hard separator patterns - target state determined by unified analysis
-            (MatchType::HardSeparator, DialogState::Unknown),                     // PatternID 24 - hard_sep_dialog_start -> analyze to determine specific dialog state
-            (MatchType::HardSeparator, DialogState::Narrative),                   // PatternID 25 - hard_sep_narrative_start  
-            (MatchType::HardSeparator, DialogState::Narrative),                   // PatternID 26 - hard_sep_eof
+            (MatchType::HardSeparator, DialogState::Unknown),                     // PatternID 27 - hard_sep_dialog_start -> analyze to determine specific dialog state
+            (MatchType::HardSeparator, DialogState::Narrative),                   // PatternID 28 - hard_sep_narrative_start
+            (MatchType::HardSeparator, DialogState::Narrative),                   // PatternID 29 - hard_sep_eof
         ];
         state_patterns.insert(DialogState::Narrative, Regex::new_many(&narrative_patterns)?);
         state_pattern_mappings.insert(DialogState::Narrative, narrative_mappings);
@@ -696,7 +713,10 @@ impl DialogStateMachine {
 
         // Replace curly brace patterns with macro - includes zero-char transitions
         generate_dialog_patterns!(DialogState::DialogParenthheticalCurly, curly_brace_close, true, None::<&str>);
-        
+
+        // GUILLEMET STATE - no zero-char transitions (asymmetric delimiters «»)
+        generate_dialog_patterns!(DialogState::DialogGuillemet, guillemet_close, false, None::<&str>);
+
         Ok(DialogStateMachine {
             state_patterns,
             state_pattern_mappings,
@@ -787,6 +807,7 @@ impl DialogStateMachine {
                             '{' => DialogState::DialogParenthheticalCurly,
                             '\u{201C}' => DialogState::DialogSmartDoubleOpen,
                             '\u{2018}' => DialogState::DialogSmartSingleOpen,
+                            '\u{00AB}' => DialogState::DialogGuillemet,
                             _ => DialogState::Narrative,
                         }
                     } else {
@@ -1077,13 +1098,16 @@ impl DialogStateMachine {
         
         // Find the end of whitespace sequence - where SENT_START begins
         let mut in_whitespace = false;
-        
+
         for (i, ch) in matched_boundary.char_indices() {
             if ch.is_whitespace() {
-                if !in_whitespace {
-                    in_whitespace = true;
-                }
+                in_whitespace = true;
             } else if in_whitespace {
+                // WHY: French guillemets sit between whitespace runs (e.g. "! »  T"),
+                // so skip closing guillemets rather than treating them as sentence start.
+                if matches!(ch, '\u{00BB}' | '\u{203A}') {
+                    continue;
+                }
                 // Found non-whitespace after whitespace - this is start of SENT_START
                 return Some(i);
             }

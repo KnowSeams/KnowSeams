@@ -1600,3 +1600,83 @@ fn test_dialog_to_dialog_transitions_all_states() {
         "BUG: Only {}/{} zero-char transitions work - missing zero-character separator patterns",
         zero_char_working, zero_char_total);
 }
+
+// ── Guillemet (French angle-quote) tests ──────────────────────────────────────
+
+#[test]
+fn test_guillemet_basic_dialog() {
+    let detector = get_detector();
+    // Simple guillemet-quoted dialog followed by narrative
+    let text = "«Bonjour», dit-il. Il entra dans la pièce.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    assert!(
+        sentences.len() >= 1,
+        "Expected at least 1 sentence, got 0. Input: {:?}", text
+    );
+    assert!(
+        sentences[0].raw_content.contains("Bonjour"),
+        "First sentence should contain dialog text. Got: {:?}",
+        sentences[0].raw_content
+    );
+}
+
+#[test]
+fn test_guillemet_french_interior_spaces() {
+    let detector = get_detector();
+    // French convention: space after « and before »
+    let text = "« Bonjour ! » dit-il. Il entra dans la pièce.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    assert!(
+        sentences.len() >= 1,
+        "Expected at least 1 sentence, got 0. Input: {:?}", text
+    );
+    let first = sentences[0].raw_content;
+    assert!(
+        first.contains("Bonjour"),
+        "First sentence should contain dialog text. Got: {:?}", first
+    );
+}
+
+#[test]
+fn test_guillemet_hard_end_to_narrative() {
+    let detector = get_detector();
+    // Guillemet dialog ending with sentence-terminal punct → hard boundary → narrative
+    let text = "Il dit : «Partez immédiatement !» Elle obéit aussitôt. La porte se ferma.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    assert!(
+        sentences.len() >= 2,
+        "Expected ≥2 sentences, got {}.\nSentences: {:?}",
+        sentences.len(),
+        sentences.iter().map(|s| s.raw_content).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_guillemet_narrative_to_guillemet_boundary() {
+    let detector = get_detector();
+    // Sentence ending in punct followed by guillemet-quoted next sentence
+    let text = "Elle hésita. «Non», répondit-elle enfin.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    assert!(
+        sentences.len() >= 1,
+        "Expected ≥1 sentence, got 0. Input: {:?}", text
+    );
+    // First sentence should be the narrative part
+    assert!(
+        sentences[0].raw_content.contains("hésita"),
+        "First sentence should be 'Elle hésita.' Got: {:?}", sentences[0].raw_content
+    );
+}
+
+#[test]
+fn test_guillemet_no_false_split_inside_dialog() {
+    let detector = get_detector();
+    // Multiple sentence-terminal punct inside guillemet dialog should coalesce into one sentence
+    let text = "«Arrêtez ! Partez ! Vite !» cria-t-elle.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let all_text: String = sentences.iter().map(|s| s.raw_content).collect::<Vec<_>>().join(" ");
+    assert!(
+        all_text.contains("Arrêtez") && all_text.contains("Vite"),
+        "All dialog content should be present. Got: {:?}", all_text
+    );
+}
