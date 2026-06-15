@@ -1,6 +1,6 @@
 # KnowSeams — Repository Navigation Guide
 
-**`seams` v0.1.1** — High-throughput sentence extractor for Project Gutenberg texts with dialog-aware detection.
+**`seams` v0.1.3** — High-throughput sentence extractor for Project Gutenberg texts with dialog-aware detection.
 
 ---
 

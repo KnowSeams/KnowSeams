@@ -241,7 +241,11 @@ impl DialogStateMachine {
                 29 => "HardSepEOF".to_string(),
                 _ => format!("Unknown[{pattern_id}]"),
             },
-            DialogState::DialogDoubleQuote => match pattern_id {
+            DialogState::DialogDoubleQuote |
+            DialogState::DialogSingleQuote |
+            DialogState::DialogSmartDoubleOpen |
+            DialogState::DialogSmartSingleOpen |
+            DialogState::DialogGuillemet => match pattern_id {
                 0 => "HardSepDialogStart".to_string(),
                 1 => "HardSepNarrativeStart".to_string(),
                 2 => "HardSepEOF".to_string(),
@@ -249,39 +253,56 @@ impl DialogStateMachine {
                 4 => "DialogToDialogSoft".to_string(),
                 5 => "DialogHardEnd".to_string(),
                 6 => "DialogSoftEnd".to_string(),
-                7 => "DialogContinuationBefore".to_string(),
-                8 => "DialogContinuationAfter".to_string(),
-                9 => "DialogUnpunctuatedHardEnd".to_string(),
-                10 => "DialogUnpunctuatedSoftEnd".to_string(),
+                7 => "DialogLineEnd".to_string(),
+                8 => "DialogExternalHardEnd".to_string(),
+                9 => "DialogExternalSoftEnd".to_string(),
+                10 => "DialogExternalLineEnd".to_string(),
+                11 => "DialogContinuationBefore".to_string(),
+                12 => "DialogContinuationAfter".to_string(),
+                13 => "DialogUnpunctuatedHardEnd".to_string(),
+                14 => "DialogUnpunctuatedSoftEnd".to_string(),
                 _ => format!("Unknown[{pattern_id}]"),
             },
-            DialogState::DialogSingleQuote |
-            DialogState::DialogSmartDoubleOpen |
-            DialogState::DialogSmartSingleOpen |
             DialogState::DialogParenthheticalSquare |
-            DialogState::DialogParenthheticalCurly |
-            DialogState::DialogGuillemet => match pattern_id {
+            DialogState::DialogParenthheticalCurly => match pattern_id {
                 0 => "HardSepDialogStart".to_string(),
                 1 => "HardSepNarrativeStart".to_string(),
                 2 => "HardSepEOF".to_string(),
-                3 => "DialogHardEnd".to_string(),
-                4 => "DialogSoftEnd".to_string(),
-                5 => "DialogContinuationBefore".to_string(),
-                6 => "DialogContinuationAfter".to_string(),
-                7 => "DialogUnpunctuatedHardEnd".to_string(),
-                8 => "DialogUnpunctuatedSoftEnd".to_string(),
+                3 => "DialogToDialogHard".to_string(),
+                4 => "DialogToDialogSoft".to_string(),
+                5 => "DialogToDialogZeroCharHard".to_string(),
+                6 => "DialogToDialogZeroCharSoft".to_string(),
+                7 => "DialogHardEnd".to_string(),
+                8 => "DialogSoftEnd".to_string(),
+                9 => "DialogLineEnd".to_string(),
+                10 => "DialogExternalHardEnd".to_string(),
+                11 => "DialogExternalSoftEnd".to_string(),
+                12 => "DialogExternalLineEnd".to_string(),
+                13 => "DialogContinuationBefore".to_string(),
+                14 => "DialogContinuationAfter".to_string(),
+                15 => "DialogUnpunctuatedHardEnd".to_string(),
+                16 => "DialogUnpunctuatedSoftEnd".to_string(),
                 _ => format!("Unknown[{pattern_id}]"),
             },
             DialogState::DialogParenthheticalRound => match pattern_id {
                 0 => "HardSepDialogStart".to_string(),
                 1 => "HardSepNarrativeStart".to_string(),
                 2 => "HardSepEOF".to_string(),
-                3 => "DialogHardEnd".to_string(),
-                4 => "DialogSoftEnd".to_string(),
-                5 => "DialogContinuationBefore".to_string(),
-                6 => "DialogNonSentencePunct".to_string(),
-                7 => "DialogUnpunctuatedHardEnd".to_string(),
-                8 => "DialogUnpunctuatedSoftEnd".to_string(),
+                3 => "DialogToDialogHard".to_string(),
+                4 => "DialogToDialogSoft".to_string(),
+                5 => "DialogToDialogZeroCharHard".to_string(),
+                6 => "DialogToDialogZeroCharSoft".to_string(),
+                7 => "DialogHardEnd".to_string(),
+                8 => "DialogSoftEnd".to_string(),
+                9 => "DialogLineEnd".to_string(),
+                10 => "DialogExternalHardEnd".to_string(),
+                11 => "DialogExternalSoftEnd".to_string(),
+                12 => "DialogExternalLineEnd".to_string(),
+                13 => "DialogContinuationBefore".to_string(),
+                14 => "DialogContinuationAfter".to_string(),
+                15 => "DialogNonSentencePunct".to_string(),
+                16 => "DialogUnpunctuatedHardEnd".to_string(),
+                17 => "DialogUnpunctuatedSoftEnd".to_string(),
                 _ => format!("Unknown[{pattern_id}]"),
             },
             DialogState::Unknown => format!("UnknownState[{pattern_id}]"),
@@ -513,6 +534,7 @@ impl DialogStateMachine {
                 // Internal punctuation patterns: sentence_end + close + separator + next_char  
                 let dialog_hard_end = format!("{sentence_end_punct}{close_char}({soft_separator}){non_dialog_sentence_start_chars}");  // ." The, .' The, .) The
                 let dialog_soft_end = format!("{sentence_end_punct}{close_char}({soft_separator}){not_all_sentence_start_chars}");  // ." the, .' the, .) the
+                let dialog_line_end = format!("{sentence_end_punct}{close_char}{line_boundary}");  // ."\n, .'\n, .)\n
                 
                 // Dialog->Dialog transitions: close + separator + dialog_opener + next_char
                 let dialog_to_dialog_hard = format!("{close_char}({soft_separator}){dialog_open_chars}{non_dialog_sentence_start_chars}");  // " (The, ' "The, ) [The
@@ -529,6 +551,7 @@ impl DialogStateMachine {
                 // External definitive punctuation: close + definitive_punct + separator + next_char
                 let dialog_external_hard_end = format!("{close_char}[.!?]({soft_separator}){non_dialog_sentence_start_chars}");  // "! The, '? The, )! The
                 let dialog_external_soft_end = format!("{close_char}[.!?]({soft_separator}){not_all_sentence_start_chars}");  // "! the, '? the, )! the
+                let dialog_external_line_end = format!("{close_char}[.!?]{line_boundary}");  // "!\n, '?\n, )!\n
                 
                 // Continuation punctuation patterns: punct + close or close + punct
                 let dialog_continuation_before_end = format!("{non_sentence_ending_punct}{close_char}({soft_separator}){unified_sentence_start_chars}");  // ," The, ,' The, ,) The
@@ -556,8 +579,10 @@ impl DialogStateMachine {
                 // Continue with standard patterns
                 patterns.push(dialog_hard_end.as_str());                     // punctuated sentence boundary
                 patterns.push(dialog_soft_end.as_str());                     // punctuated continue sentence
+                patterns.push(dialog_line_end.as_str());                     // punctuated dialog close at line end
                 patterns.push(dialog_external_hard_end.as_str());           // external definitive punct + capital → Split
                 patterns.push(dialog_external_soft_end.as_str());           // external definitive punct + lowercase → Continue
+                patterns.push(dialog_external_line_end.as_str());           // external definitive punct at line end
                 patterns.push(dialog_continuation_before_end.as_str());     // continuation punct before close → Continue
                 patterns.push(dialog_continuation_after_end.as_str());      // continuation punct after close → Continue
                 
@@ -587,8 +612,10 @@ impl DialogStateMachine {
                 // Continue with standard mappings
                 mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // punctuated hard dialog end
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // punctuated soft dialog end
+                mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // punctuated dialog close at line end
                 mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // external definitive punct + capital → Split
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // external definitive punct + lowercase → Continue
+                mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // external definitive punct at line end
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // continuation punct before close → Continue
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // continuation punct after close → Continue
                 
@@ -1195,4 +1222,3 @@ impl SentenceDetectorDialog {
 
 
 }
-

@@ -984,6 +984,26 @@ fn test_simple_hard_separator_continue_bug() {
 }
 
 #[test]
+fn test_dialog_close_newline_terminates_before_control_line() {
+    let detector = get_detector();
+    let text = "He said, \u{201C}go to the door.\u{201D}\n*** CONTROL LINE ***";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+
+    assert_eq!(
+        sentences.len(),
+        2,
+        "Dialog close at line end should split before the following line\nSentences: {:?}",
+        sentences
+            .iter()
+            .map(|s| s.normalize().trim().to_string())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(sentences[0].normalize().trim(), "He said, \u{201C}go to the door.\u{201D}");
+    assert_eq!(sentences[1].normalize().trim(), "*** CONTROL LINE ***");
+}
+
+#[test]
 fn test_dialog_pattern_partitioning_comprehensive() {
     let detector = get_detector();
     
