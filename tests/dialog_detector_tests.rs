@@ -334,6 +334,60 @@ fn test_pg4300_compass_directions_fix() {
 }
 
 #[test]
+fn coordinate_direction_abbreviation_can_end_sentence() {
+    let detector = get_detector();
+
+    let text = "The ship was lost at latitude 1° S. and longitude 107° W. On January the report arrived.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let got: Vec<_> = sentences
+        .iter()
+        .map(|s| s.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(
+        got,
+        vec![
+            "The ship was lost at latitude 1° S. and longitude 107° W.",
+            "On January the report arrived.",
+        ]
+    );
+}
+
+#[test]
+fn apostrophe_title_does_not_open_single_quote_dialog() {
+    let detector = get_detector();
+
+    let text = "It was near 'Squire Newcome's residence. The Prescott family had lived here five years.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let got: Vec<_> = sentences
+        .iter()
+        .map(|s| s.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(
+        got,
+        vec![
+            "It was near 'Squire Newcome's residence.",
+            "The Prescott family had lived here five years.",
+        ]
+    );
+}
+
+#[test]
+fn single_quoted_dialog_allows_internal_apostrophe() {
+    let detector = get_detector();
+
+    let text = "He cried, 'Don't go!' She stayed.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let got: Vec<_> = sentences
+        .iter()
+        .map(|s| s.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(got, vec!["He cried, 'Don't go!'", "She stayed."]);
+}
+
+#[test]
 fn test_missing_seams_reproduction() {
     let detector = get_detector();
     
@@ -1668,6 +1722,57 @@ fn test_guillemet_hard_end_to_narrative() {
         "Expected ≥2 sentences, got {}.\nSentences: {:?}",
         sentences.len(),
         sentences.iter().map(|s| s.raw_content).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_guillemet_hard_end_preserves_closing_delimiter_after_interior_space() {
+    let detector = get_detector();
+    let text = "Il dit : « Partez immédiatement ! » Elle obéit aussitôt.";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+
+    assert_eq!(sentences.len(), 2);
+    assert_eq!(
+        sentences[0].normalize(),
+        "Il dit : « Partez immédiatement ! »"
+    );
+    assert_eq!(sentences[1].normalize(), "Elle obéit aussitôt.");
+}
+
+#[test]
+fn test_guillemet_line_end_preserves_closing_delimiter_after_interior_space() {
+    let detector = get_detector();
+    let text = "Il dit : « Partez immédiatement ! »\nElle obéit aussitôt.";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+
+    assert_eq!(sentences.len(), 2);
+    assert_eq!(
+        sentences[0].normalize(),
+        "Il dit : « Partez immédiatement ! »"
+    );
+    assert_eq!(sentences[1].normalize(), "Elle obéit aussitôt.");
+}
+
+#[test]
+fn test_guillemet_line_end_preserves_closing_delimiter_with_interior_space() {
+    let detector = get_detector();
+
+    let text = "« Vous partez demain. »\nRenée ferme la fenêtre.";
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+
+    let normalized = sentences
+        .iter()
+        .map(|s| s.normalize().trim().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        normalized,
+        vec![
+            "« Vous partez demain. »",
+            "Renée ferme la fenêtre.",
+        ]
     );
 }
 

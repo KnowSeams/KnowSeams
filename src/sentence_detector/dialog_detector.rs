@@ -440,7 +440,7 @@ impl DialogStateMachine {
         let non_dialog_sentence_start_chars = r"[A-Z]";  // Only capital letters for narrative boundaries
         let dialog_open_chars = r"[\x22\x27\u{201C}\u{2018}\(\[\{\u{00AB}]";  // All dialog opening characters
         
-        let dialog_prefix_whitespace = r"[ \t\n]";  // Space, tab, or newline
+        let dialog_prefix_whitespace = r"(?:^|[ \t\n])";  // Start of scan, space, tab, or newline
         
         // NEW APPROACH: Explicit patterns for each dialog character type
         // Distinguish between sentence-ending and non-sentence-ending punctuation
@@ -841,6 +841,10 @@ impl DialogStateMachine {
                         DialogState::Narrative
                     };
                     (match_type, target_state)
+                } else if matches!(next_state, DialogState::DialogSingleQuote)
+                    && !Self::has_plausible_ascii_single_quote_close(text, match_end_byte.0)
+                {
+                    (match_type, DialogState::Narrative)
                 } else {
                     (match_type, next_state)
                 };
@@ -855,8 +859,15 @@ impl DialogStateMachine {
                         if sentence_end_byte.0 > sentence_start_byte.0 {
                             let content = text[sentence_start_byte.0..sentence_end_byte.0].trim().to_string();
                             if !content.is_empty() {
+                                let next_sentence_start_byte = self.find_sent_sep_end(matched_text)
+                                    .map(|sep_end_offset| match_start_byte.advance(sep_end_offset))
+                                    .unwrap_or(match_end_byte);
+
                                 // WHY: Check for abbreviation false positives before creating sentence boundary
-                                if self.abbreviation_checker.ends_with_title_abbreviation(&content) {
+                                if self.should_suppress_abbreviation_boundary(
+                                    &content,
+                                    &text[next_sentence_start_byte.0..],
+                                ) {
                                     // This is a false positive - don't create sentence boundary
                                     // Continue processing from current position without advancing sentence_start_byte
                                 } else {
@@ -874,11 +885,6 @@ impl DialogStateMachine {
                                         end_line,
                                         end_col,
                                     });
-                                    
-                                    // Next sentence starts after the separator
-                                    let next_sentence_start_byte = self.find_sent_sep_end(matched_text)
-                                        .map(|sep_end_offset| match_start_byte.advance(sep_end_offset))
-                                        .unwrap_or(match_end_byte);
                                     
                                     sentence_start_byte = next_sentence_start_byte;
                                 }
@@ -894,8 +900,15 @@ impl DialogStateMachine {
                         if sentence_end_byte.0 > sentence_start_byte.0 {
                             let content = text[sentence_start_byte.0..sentence_end_byte.0].trim().to_string();
                             if !content.is_empty() {
+                                let next_sentence_start_byte = self.find_sent_sep_end(matched_text)
+                                    .map(|sep_end_offset| match_start_byte.advance(sep_end_offset))
+                                    .unwrap_or(match_end_byte);
+
                                 // WHY: Check for abbreviation false positives before creating sentence boundary
-                                if self.abbreviation_checker.ends_with_title_abbreviation(&content) {
+                                if self.should_suppress_abbreviation_boundary(
+                                    &content,
+                                    &text[next_sentence_start_byte.0..],
+                                ) {
                                     // This is a false positive - don't create sentence boundary
                                     // Continue processing from current position without advancing sentence_start_byte
                                 } else {
@@ -913,11 +926,6 @@ impl DialogStateMachine {
                                         end_line,
                                         end_col,
                                     });
-                                    
-                                    // Next sentence starts after the separator
-                                    let next_sentence_start_byte = self.find_sent_sep_end(matched_text)
-                                        .map(|sep_end_offset| match_start_byte.advance(sep_end_offset))
-                                        .unwrap_or(match_end_byte);
                                     
                                     sentence_start_byte = next_sentence_start_byte;
                                 }
@@ -1086,6 +1094,114 @@ impl DialogStateMachine {
         None
     }
     
+    fn is_closing_delimiter(ch: char) -> bool {
+        matches!(
+            ch,
+            '"' | '\''
+                | '\u{201D}' | '\u{2019}'
+                | ')' | ']' | '}' | '>'
+                | '\u{00BB}' | '\u{203A}'
+        )
+    }
+
+    fn next_non_whitespace_char(text: &str) -> Option<(usize, char)> {
+        text.char_indices().find(|(_, ch)| !ch.is_whitespace())
+    }
+
+    fn clean_abbreviation_word(word: &str) -> &str {
+        word.trim_matches(|c: char| {
+            matches!(
+                c,
+                '"' | '\''
+                    | '\u{201C}' | '\u{201D}' | '\u{2018}' | '\u{2019}'
+                    | '(' | ')' | '[' | ']' | '{' | '}'
+                    | '\u{00AB}' | '\u{00BB}' | '\u{2039}' | '\u{203A}'
+            )
+        })
+    }
+
+    fn is_compass_direction_abbreviation(word: &str) -> bool {
+        matches!(word, "N." | "S." | "E." | "W.")
+    }
+
+    fn ends_with_degree_coordinate_direction(text: &str) -> bool {
+        let mut words = text.split_whitespace().rev();
+        let Some(direction) = words.next().map(Self::clean_abbreviation_word) else {
+            return false;
+        };
+
+        if !Self::is_compass_direction_abbreviation(direction) {
+            return false;
+        }
+
+        words
+            .next()
+            .map(Self::clean_abbreviation_word)
+            .is_some_and(|previous| previous.contains('\u{00B0}'))
+    }
+
+    fn starts_with_compass_direction_abbreviation(text: &str) -> bool {
+        text.split_whitespace()
+            .next()
+            .map(Self::clean_abbreviation_word)
+            .is_some_and(Self::is_compass_direction_abbreviation)
+    }
+
+    fn should_suppress_abbreviation_boundary(&self, content: &str, next_text: &str) -> bool {
+        if !self.abbreviation_checker.ends_with_title_abbreviation(content) {
+            return false;
+        }
+
+        if Self::ends_with_degree_coordinate_direction(content)
+            && !Self::starts_with_compass_direction_abbreviation(next_text)
+        {
+            return false;
+        }
+
+        true
+    }
+
+    fn has_plausible_ascii_single_quote_close(text: &str, start_byte: usize) -> bool {
+        let remaining = &text[start_byte..];
+        let mut previous = None;
+        let mut previous_was_newline = false;
+
+        for (i, ch) in remaining.char_indices() {
+            // Straight apostrophe is ambiguous, so validate cheaply without scanning an
+            // entire file for malformed or elided-title cases.
+            if i > 4096 {
+                return false;
+            }
+
+            if ch == '\n' {
+                if previous_was_newline {
+                    return false;
+                }
+                previous_was_newline = true;
+            } else if ch != '\r' {
+                previous_was_newline = false;
+            }
+
+            if ch == '\'' {
+                let next = remaining[i + ch.len_utf8()..].chars().next();
+                let apostrophe_inside_word = previous.is_some_and(char::is_alphanumeric)
+                    && next.is_some_and(char::is_alphanumeric);
+                let opening_like_quote = previous.is_none_or(char::is_whitespace);
+
+                if apostrophe_inside_word || opening_like_quote {
+                    previous = Some(ch);
+                    continue;
+                }
+
+                return true;
+            }
+
+            previous = Some(ch);
+        }
+
+        false
+    }
+
     fn find_sent_sep_start(&self, matched_boundary: &str) -> Option<usize> {
         // Find where SENT_SEP starts within a SENT_END + SENT_SEP + SENT_START match
         // Look for the first whitespace character or hard separator
@@ -1096,9 +1212,23 @@ impl DialogStateMachine {
         // Find first whitespace after punctuation
         let mut found_punct = false;
         for (i, ch) in matched_boundary.char_indices() {
-            if ".!?".contains(ch) || "\"'".contains(ch) || ")]}>".contains(ch) {
+            if ".!?".contains(ch) || Self::is_closing_delimiter(ch) {
                 found_punct = true;
             } else if found_punct && ch.is_whitespace() {
+                let after_whitespace = i + ch.len_utf8();
+                if let Some((next_offset, next_ch)) =
+                    Self::next_non_whitespace_char(&matched_boundary[after_whitespace..])
+                {
+                    let after_candidate = after_whitespace + next_offset + next_ch.len_utf8();
+                    let followed_by_separator = matched_boundary[after_candidate..]
+                        .chars()
+                        .next()
+                        .is_some_and(|following| following.is_whitespace() || ".!?".contains(following));
+
+                    if Self::is_closing_delimiter(next_ch) && followed_by_separator {
+                        continue;
+                    }
+                }
                 return Some(i);
             }
         }
