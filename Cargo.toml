@@ -1,6 +1,6 @@
 [package]
 name = "seams"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2021"
 description = "High-throughput sentence extractor for Project Gutenberg texts with dialog-aware detection"
 license = "MIT"
