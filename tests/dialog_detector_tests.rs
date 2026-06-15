@@ -110,6 +110,59 @@ fn test_abbreviation_handling() {
 }
 
 #[test]
+fn test_structural_enumerated_headings_split_before_prose() {
+    let detector = get_detector();
+    let cases = [
+        ("CHAPTER I.\n\nSir Walter Elliot was a man. This was next.", "CHAPTER I.", "Sir Walter Elliot was a man."),
+        ("PART I.\n\nIn the morning, she left. This was next.", "PART I.", "In the morning, she left."),
+        ("BOOK V.\n\nThe road was empty. This was next.", "BOOK V.", "The road was empty."),
+        ("APPENDIX A.\n\nAdditional notes follow. This was next.", "APPENDIX A.", "Additional notes follow."),
+        ("LETTER I.\n\nTo my dear friend, I write. This was next.", "LETTER I.", "To my dear friend, I write."),
+        ("ACT I.\n\nThe curtain rises. This was next.", "ACT I.", "The curtain rises."),
+        ("SCENE I.\n\nA room in the palace. This was next.", "SCENE I.", "A room in the palace."),
+    ];
+
+    for (text, heading, first_prose) in cases {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        let normalized: Vec<_> = sentences
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+
+        assert_eq!(
+            normalized,
+            vec![
+                heading.to_string(),
+                first_prose.to_string(),
+                "This was next.".to_string(),
+            ],
+            "Structural heading ending in a single-capital enumerator should not be suppressed as a title abbreviation"
+        );
+    }
+}
+
+#[test]
+fn test_single_capital_abbreviation_still_suppresses_non_heading_boundary() {
+    let detector = get_detector();
+    let text = "Point I. Sir Walter Elliot was listed. This was next.";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let normalized: Vec<_> = sentences
+        .iter()
+        .map(|sentence| sentence.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(
+        normalized,
+        vec![
+            "Point I. Sir Walter Elliot was listed.",
+            "This was next.",
+        ],
+        "Non-heading single-capital abbreviations should keep their existing suppression behavior"
+    );
+}
+
+#[test]
 fn test_soft_dialog_transitions() {
     let detector = get_detector();
     
@@ -315,6 +368,50 @@ fn test_dialog_hard_separator_minimal() {
     assert_eq!(sentences_windows.len(), 2, "Should detect 2 sentences with Windows line endings");
     assert_eq!(sentences_windows[0].normalize().trim(), "He said: \"Hello.\"");
     assert_eq!(sentences_windows[1].normalize().trim(), "\"World.\"");
+}
+
+#[test]
+fn test_all_caps_dash_heading_splits_across_hard_separator() {
+    let detector = get_detector();
+    let text = "CHAPTER XIV.\nOUT OF THE FRYING-PAN--\n\n/After/ that exciting ride home, she rested. This was next.";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let normalized: Vec<_> = sentences
+        .iter()
+        .map(|sentence| sentence.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(
+        normalized,
+        vec![
+            "CHAPTER XIV.",
+            "OUT OF THE FRYING-PAN--",
+            "/After/ that exciting ride home, she rested.",
+            "This was next.",
+        ],
+        "All-caps title lines ending in dashes should not fuse with prose across a blank line"
+    );
+}
+
+#[test]
+fn test_ordinary_dash_continuation_still_coalesces_across_hard_separator() {
+    let detector = get_detector();
+    let text = "She stopped--\n\n/After/ that, she rested. This was next.";
+
+    let sentences = detector.detect_sentences_borrowed(text).unwrap();
+    let normalized: Vec<_> = sentences
+        .iter()
+        .map(|sentence| sentence.normalize().trim().to_string())
+        .collect();
+
+    assert_eq!(
+        normalized,
+        vec![
+            "She stopped-- /After/ that, she rested.",
+            "This was next.",
+        ],
+        "Ordinary dash continuations should keep coalescing across hard separators"
+    );
 }
 
 #[test]

@@ -223,6 +223,10 @@ pub struct DialogStateMachine {
     abbreviation_checker: AbbreviationChecker,
 }
 
+const STRUCTURAL_HEADING_LABELS: &[&str] = &[
+    "CHAPTER", "SECTION", "PART", "BOOK", "APPENDIX", "LETTER", "ACT", "SCENE",
+];
+
 impl DialogStateMachine {
     
     /// Helper to get human-readable pattern name from pattern ID and state
@@ -382,8 +386,14 @@ impl DialogStateMachine {
                     // Closing delimiters - accept hard separator (they are terminal)
                     b'"' | b'\'' | b')' | b']' | b'}' => return false,
                     
+                    // Heading/title lines often end with a dash before a blank line.
+                    // Keep the context local to the immediate preceding line.
+                    b'-' | b'/' => {
+                        return !Self::preceding_line_is_all_caps_heading(text_bytes, pos + 1);
+                    }
+
                     // Internal punctuation - reject hard separator (coalesce)
-                    b',' | b';' | b':' | b'-' | b'/' | 
+                    b',' | b';' | b':' |
                     b'(' | b'[' | b'{' => return true,
                     
                     // Other characters (letters, digits, etc.) - treat as continuation, reject separator
@@ -402,7 +412,13 @@ impl DialogStateMachine {
                             '\u{201D}' | '\u{2019}' | '\u{00BB}' => return false,
                             
                             // Internal punctuation (em/en dash, smart opening quotes) - reject separator
-                            '\u{2014}' | '\u{2013}' | '\u{201C}' | '\u{2018}' => return true,
+                            '\u{2014}' | '\u{2013}' => {
+                                return !Self::preceding_line_is_all_caps_heading(
+                                    text_bytes,
+                                    pos + ch.len_utf8(),
+                                );
+                            }
+                            '\u{201C}' | '\u{2018}' => return true,
                             
                             // Ellipsis - treat as continuation, reject separator
                             '\u{2026}' => return true,
@@ -1124,6 +1140,80 @@ impl DialogStateMachine {
         matches!(word, "N." | "S." | "E." | "W.")
     }
 
+    fn is_roman_numeral(text: &str) -> bool {
+        !text.is_empty()
+            && text
+                .chars()
+                .all(|ch| matches!(ch, 'I' | 'V' | 'X' | 'L' | 'C' | 'D' | 'M'))
+    }
+
+    fn is_single_letter_enumerator(text: &str) -> bool {
+        let mut chars = text.chars();
+        chars
+            .next()
+            .is_some_and(|ch| ch.is_ascii_uppercase())
+            && chars.next().is_none()
+    }
+
+    fn is_heading_enumerator(text: &str) -> bool {
+        Self::is_roman_numeral(text) || Self::is_single_letter_enumerator(text)
+    }
+
+    fn is_structural_heading_label(text: &str) -> bool {
+        STRUCTURAL_HEADING_LABELS.contains(&text)
+    }
+
+    fn is_structural_enumerated_heading(text: &str) -> bool {
+        let trimmed = text.trim();
+        let without_period = trimmed.strip_suffix('.').unwrap_or(trimmed).trim_end();
+        let mut words = without_period.split_whitespace();
+
+        let Some(label) = words.next() else {
+            return false;
+        };
+        let label = label.trim_matches(|ch: char| !ch.is_ascii_alphabetic());
+        let label = label.to_ascii_uppercase();
+        if !Self::is_structural_heading_label(&label) {
+            return false;
+        }
+
+        let Some(enumerator) = words.next() else {
+            return false;
+        };
+        let enumerator = enumerator.trim_matches(|ch: char| !ch.is_ascii_alphanumeric());
+
+        words.next().is_none() && Self::is_heading_enumerator(enumerator)
+    }
+
+    fn preceding_line_is_all_caps_heading(text_bytes: &[u8], line_end_byte: usize) -> bool {
+        let line_start = text_bytes[..line_end_byte]
+            .iter()
+            .rposition(|&byte| byte == b'\n')
+            .map_or(0, |newline_pos| newline_pos + 1);
+
+        std::str::from_utf8(&text_bytes[line_start..line_end_byte])
+            .is_ok_and(Self::is_all_caps_heading_line)
+    }
+
+    fn is_all_caps_heading_line(line: &str) -> bool {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+
+        let mut uppercase_letters = 0;
+        for ch in trimmed.chars() {
+            if ch.is_lowercase() {
+                return false;
+            }
+            if ch.is_uppercase() {
+                uppercase_letters += 1;
+            }
+        }
+
+        uppercase_letters >= 3
+    }
+
     fn ends_with_degree_coordinate_direction(text: &str) -> bool {
         let mut words = text.split_whitespace().rev();
         let Some(direction) = words.next().map(Self::clean_abbreviation_word) else {
@@ -1149,6 +1239,10 @@ impl DialogStateMachine {
 
     fn should_suppress_abbreviation_boundary(&self, content: &str, next_text: &str) -> bool {
         if !self.abbreviation_checker.ends_with_title_abbreviation(content) {
+            return false;
+        }
+
+        if Self::is_structural_enumerated_heading(content) {
             return false;
         }
 
