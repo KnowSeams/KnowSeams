@@ -858,7 +858,24 @@ impl DialogStateMachine {
                     } else {
                         DialogState::Narrative
                     };
-                    (match_type, target_state)
+                    let continues_into_parenthetical_i = matches!(
+                        target_state,
+                        DialogState::DialogParenthheticalRound
+                    ) && !Self::has_terminal_punctuation_before_close(
+                        &text[sentence_start_byte.0..match_start_byte.0],
+                    ) && matched_text
+                        .rfind('(')
+                        .is_some_and(|open_offset| {
+                            Self::starts_with_parenthetical_standalone_i(
+                                &text[match_start_byte.0 + open_offset..],
+                            )
+                        });
+
+                    if continues_into_parenthetical_i {
+                        (MatchType::DialogOpen, target_state)
+                    } else {
+                        (match_type, target_state)
+                    }
                 } else if matches!(match_type, MatchType::DialogLineEnd) {
                     let next_sentence_start_byte = self
                         .find_sent_sep_end(matched_text)
@@ -1266,6 +1283,23 @@ impl DialogStateMachine {
         text.trim_start_matches([' ', '\t'])
             .strip_prefix('I')
             .is_some_and(|rest| rest.starts_with(char::is_whitespace))
+    }
+
+    fn starts_with_parenthetical_standalone_i(text: &str) -> bool {
+        text.strip_prefix('(')
+            .map(str::trim_start)
+            .is_some_and(Self::starts_with_standalone_i)
+    }
+
+    fn has_terminal_punctuation_before_close(text: &str) -> bool {
+        text.chars()
+            .rev()
+            .find(|ch| {
+                !ch.is_whitespace()
+                    && !Self::is_closing_delimiter(*ch)
+                    && !matches!(ch, '_' | '*')
+            })
+            .is_some_and(|ch| matches!(ch, '.' | '!' | '?'))
     }
 
     fn preceding_line_is_all_caps_heading(text_bytes: &[u8], line_end_byte: usize) -> bool {

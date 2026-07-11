@@ -271,6 +271,80 @@ fn capitalized_dialog_followup_still_splits() {
 }
 
 #[test]
+fn terminal_punctuation_before_nested_close_keeps_standalone_i_split() {
+    let detector = get_detector();
+    let cases = [
+        "The letter is signed \u{201C}\u{2018}Alice Fairfax.\u{2019}\u{201D} I felt cold.",
+        "\u{201C}What do you think, _mon ami?_\u{201D} I shook my head.",
+        "He called that \u{201C}wrong.\u{201D} I went home.",
+    ];
+
+    for text in cases {
+        let actual = detector.detect_sentences_borrowed(text).unwrap();
+        assert_eq!(actual.len(), 2, "terminal close should split: {text}");
+    }
+}
+
+#[test]
+fn unpunctuated_dialog_may_continue_into_parenthetical_i() {
+    let detector = get_detector();
+    let cases = [
+        (
+            "An advertisement said \u{201C}children under fourteen\u{201D} (I thought that prudent). \u{201C}She is qualified.\u{201D}",
+            vec!["An advertisement said \u{201C}children under fourteen\u{201D} (I thought that prudent). \u{201C}She is qualified.\u{201D}"],
+        ),
+        (
+            "\u{201C}Captain—Captain\u{201D} (I could not remember the name) \u{201C}dossing down in there.\u{201D} Next.",
+            vec![
+                "\u{201C}Captain—Captain\u{201D} (I could not remember the name) \u{201C}dossing down in there.\u{201D}",
+                "Next.",
+            ],
+        ),
+        (
+            "\u{201C}Captain—Captain\u{201D}\n(I could not remember the name) \u{201C}dossing down in there.\u{201D} Next.",
+            vec![
+                "\u{201C}Captain—Captain\u{201D} (I could not remember the name) \u{201C}dossing down in there.\u{201D}",
+                "Next.",
+            ],
+        ),
+    ];
+
+    for (text, expected) in cases {
+        let actual: Vec<_> = detector
+            .detect_sentences_borrowed(text)
+            .unwrap()
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn terminal_dialog_before_parenthetical_i_remains_split() {
+    let detector = get_detector();
+    for text in [
+        "\u{201C}Done.\u{201D} (I started a new thought.)",
+        "\u{201C}A mere reed!\u{201D} (And he shook me.) \u{201C}I could bend her.\u{201D}",
+    ] {
+        let actual = detector.detect_sentences_borrowed(text).unwrap();
+        assert!(actual.len() >= 2, "terminal close should split: {text}");
+    }
+}
+
+#[test]
+fn unpunctuated_close_does_not_blanket_merge_standalone_i() {
+    let detector = get_detector();
+    for text in [
+        "The box said \u{201C}Honey Boy\u{201D} I suppose it meant cookies.",
+        "He said \u{2018}You have all the old-fashioned principles, good and bad\u{2019} I acknowledge I have.",
+    ] {
+        let actual = detector.detect_sentences_borrowed(text).unwrap();
+        assert_eq!(actual.len(), 2, "standalone I boundary control failed: {text}");
+    }
+}
+
+#[test]
 fn test_single_capital_abbreviation_still_suppresses_non_heading_boundary() {
     let detector = get_detector();
     let text = "Point I. Sir Walter Elliot was listed. This was next.";
