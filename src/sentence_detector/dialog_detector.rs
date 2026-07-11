@@ -194,6 +194,7 @@ pub enum MatchType {
     DialogOpen,
     DialogEnd,
     DialogSoftEnd,
+    DialogLineEnd,
     HardSeparator,
 }
 
@@ -224,7 +225,8 @@ pub struct DialogStateMachine {
 }
 
 const STRUCTURAL_HEADING_LABELS: &[&str] = &[
-    "CHAPTER", "SECTION", "PART", "BOOK", "APPENDIX", "LETTER", "ACT", "SCENE",
+    "CHAPTER", "SECTION", "PART", "BOOK", "VOLUME", "APPENDIX", "LETTER", "ACT",
+    "SCENE", "PROLOGUE", "EPILOGUE", "PREFACE", "INTRODUCTION",
 ];
 
 impl DialogStateMachine {
@@ -550,7 +552,7 @@ impl DialogStateMachine {
                 // Internal punctuation patterns: sentence_end + close + separator + next_char  
                 let dialog_hard_end = format!("{sentence_end_punct}{close_char}({soft_separator}){non_dialog_sentence_start_chars}");  // ." The, .' The, .) The
                 let dialog_soft_end = format!("{sentence_end_punct}{close_char}({soft_separator}){not_all_sentence_start_chars}");  // ." the, .' the, .) the
-                let dialog_line_end = format!("{sentence_end_punct}{close_char}{line_boundary}");  // ."\n, .'\n, .)\n
+                let dialog_line_end = format!("{sentence_end_punct}{close_char}{line_boundary}[ \\t]*[^ \\t\\r\\n]");  // ."\ns, ."\nS
                 
                 // Dialog->Dialog transitions: close + separator + dialog_opener + next_char
                 let dialog_to_dialog_hard = format!("{close_char}({soft_separator}){dialog_open_chars}{non_dialog_sentence_start_chars}");  // " (The, ' "The, ) [The
@@ -567,7 +569,7 @@ impl DialogStateMachine {
                 // External definitive punctuation: close + definitive_punct + separator + next_char
                 let dialog_external_hard_end = format!("{close_char}[.!?]({soft_separator}){non_dialog_sentence_start_chars}");  // "! The, '? The, )! The
                 let dialog_external_soft_end = format!("{close_char}[.!?]({soft_separator}){not_all_sentence_start_chars}");  // "! the, '? the, )! the
-                let dialog_external_line_end = format!("{close_char}[.!?]{line_boundary}");  // "!\n, '?\n, )!\n
+                let dialog_external_line_end = format!("{close_char}[.!?]{line_boundary}[ \\t]*[^ \\t\\r\\n]");  // "!\ns, "!\nS
                 
                 // Continuation punctuation patterns: punct + close or close + punct
                 let dialog_continuation_before_end = format!("{non_sentence_ending_punct}{close_char}({soft_separator}){unified_sentence_start_chars}");  // ," The, ,' The, ,) The
@@ -628,10 +630,10 @@ impl DialogStateMachine {
                 // Continue with standard mappings
                 mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // punctuated hard dialog end
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // punctuated soft dialog end
-                mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // punctuated dialog close at line end
+                mappings.push((MatchType::DialogLineEnd, DialogState::Narrative));      // punctuated dialog close at line end
                 mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // external definitive punct + capital → Split
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // external definitive punct + lowercase → Continue
-                mappings.push((MatchType::DialogEnd, DialogState::Narrative));          // external definitive punct at line end
+                mappings.push((MatchType::DialogLineEnd, DialogState::Narrative));      // external definitive punct at line end
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // continuation punct before close → Continue
                 mappings.push((MatchType::DialogSoftEnd, DialogState::Narrative));      // continuation punct after close → Continue
                 
@@ -857,6 +859,34 @@ impl DialogStateMachine {
                         DialogState::Narrative
                     };
                     (match_type, target_state)
+                } else if matches!(match_type, MatchType::DialogLineEnd) {
+                    let next_sentence_start_byte = self
+                        .find_sent_sep_end(matched_text)
+                        .map(|separator_end_offset| {
+                            match_start_byte.advance(separator_end_offset)
+                        })
+                        .unwrap_or(match_end_byte);
+                    let next_text = &text[next_sentence_start_byte.0..];
+                    let next_char = next_text.chars().next();
+                    let continues = next_char.is_some_and(char::is_lowercase)
+                        || next_char == Some('(')
+                        || (Self::starts_with_standalone_i(next_text)
+                            && self
+                                .find_sent_sep_start(matched_text)
+                                .map(|separator_offset| {
+                                    let sentence_end_byte =
+                                        match_start_byte.advance(separator_offset);
+                                    Self::has_fronted_dialog_question(
+                                        &text[sentence_start_byte.0..sentence_end_byte.0],
+                                    )
+                                })
+                                .unwrap_or(false));
+
+                    if continues {
+                        (MatchType::DialogSoftEnd, DialogState::Narrative)
+                    } else {
+                        (MatchType::DialogEnd, DialogState::Narrative)
+                    }
                 } else if matches!(next_state, DialogState::DialogSingleQuote)
                     && !Self::has_plausible_ascii_single_quote_close(text, match_end_byte.0)
                 {
@@ -991,6 +1021,9 @@ impl DialogStateMachine {
                         // Continue the current sentence through the dialog close
                         // No sentence recorded, just state change
                     }
+                    MatchType::DialogLineEnd => {
+                        unreachable!("dialog line ends are resolved before boundary handling")
+                    }
                     MatchType::HardSeparator => {
                         // Hard separator - record sentence and transition to Unknown
                         if sentence_start_byte.0 < match_start_byte.0 {
@@ -1028,6 +1061,7 @@ impl DialogStateMachine {
                 let transition_type = match match_type {
                     MatchType::NarrativeToDialog | MatchType::NarrativeGestureBoundary | MatchType::DialogEnd | MatchType::HardSeparator => TransitionType::Split,
                     MatchType::DialogOpen | MatchType::DialogSoftEnd => TransitionType::Continue,
+                    MatchType::DialogLineEnd => unreachable!("dialog line ends are resolved before debug collection"),
                 };
                 
                 // Collect debug information if requested
@@ -1183,6 +1217,55 @@ impl DialogStateMachine {
         let enumerator = enumerator.trim_matches(|ch: char| !ch.is_ascii_alphanumeric());
 
         words.next().is_none() && Self::is_heading_enumerator(enumerator)
+    }
+
+    fn has_fronted_dialog_question(text: &str) -> bool {
+        let trimmed = text.trim_end();
+        let Some((dialog_close, close)) = trimmed.char_indices().next_back() else {
+            return false;
+        };
+        if !matches!(close, '"' | '\'' | '\u{201D}' | '\u{2019}' | '\u{00BB}') {
+            return false;
+        }
+
+        let dialog_start = trimmed[..dialog_close]
+            .char_indices()
+            .rev()
+            .find_map(|(index, ch)| {
+                if !matches!(ch, '"' | '\'' | '\u{201C}' | '\u{2018}' | '\u{00AB}') {
+                    return None;
+                }
+                let before_dialog = &trimmed[..index];
+                let line_boundary = before_dialog.rfind('\n')?;
+                before_dialog[line_boundary + 1..]
+                    .chars()
+                    .all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+                    .then_some((index, line_boundary))
+            });
+        let Some((dialog_start, line_boundary)) = dialog_start else {
+            return false;
+        };
+
+        if !trimmed[..line_boundary]
+            .trim_end_matches([' ', '\t', '\r'])
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+        {
+            return false;
+        }
+
+        trimmed[dialog_start..dialog_close]
+            .chars()
+            .rev()
+            .find(|ch| !ch.is_whitespace())
+            .is_some_and(|ch| ch == '?')
+    }
+
+    fn starts_with_standalone_i(text: &str) -> bool {
+        text.trim_start_matches([' ', '\t'])
+            .strip_prefix('I')
+            .is_some_and(|rest| rest.starts_with(char::is_whitespace))
     }
 
     fn preceding_line_is_all_caps_heading(text_bytes: &[u8], line_end_byte: usize) -> bool {

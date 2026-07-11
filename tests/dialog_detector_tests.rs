@@ -120,6 +120,11 @@ fn test_structural_enumerated_headings_split_before_prose() {
         ("LETTER I.\n\nTo my dear friend, I write. This was next.", "LETTER I.", "To my dear friend, I write."),
         ("ACT I.\n\nThe curtain rises. This was next.", "ACT I.", "The curtain rises."),
         ("SCENE I.\n\nA room in the palace. This was next.", "SCENE I.", "A room in the palace."),
+        ("VOLUME I.\n\nThe account begins here. This was next.", "VOLUME I.", "The account begins here."),
+        ("PROLOGUE I.\n\nThe account begins here. This was next.", "PROLOGUE I.", "The account begins here."),
+        ("EPILOGUE I.\n\nThe account concludes here. This was next.", "EPILOGUE I.", "The account concludes here."),
+        ("PREFACE I.\n\nThe editor introduces the work. This was next.", "PREFACE I.", "The editor introduces the work."),
+        ("INTRODUCTION I.\n\nThe argument begins here. This was next.", "INTRODUCTION I.", "The argument begins here."),
     ];
 
     for (text, heading, first_prose) in cases {
@@ -138,6 +143,130 @@ fn test_structural_enumerated_headings_split_before_prose() {
             ],
             "Structural heading ending in a single-capital enumerator should not be suppressed as a title abbreviation"
         );
+    }
+}
+
+#[test]
+fn dialog_close_single_newline_uses_following_clause_context() {
+    let detector = get_detector();
+    let cases = [
+        (
+            "He asked, \u{201C}Are you ready?\u{201D}\nshe nodded and opened the door. Then they left.",
+            vec![
+                "He asked, \u{201C}Are you ready?\u{201D} she nodded and opened the door.",
+                "Then they left.",
+            ],
+        ),
+        (
+            "\u{201C}What did you think? How do you feel?\u{201D}\ndemanded the visitors. A hush followed.",
+            vec![
+                "\u{201C}What did you think? How do you feel?\u{201D} demanded the visitors.",
+                "A hush followed.",
+            ],
+        ),
+        (
+            "\u{201C}Où allez-vous?\u{201D}\nrépondit Renée. La salle se tut.",
+            vec![
+                "\u{201C}Où allez-vous?\u{201D} répondit Renée.",
+                "La salle se tut.",
+            ],
+        ),
+        (
+            "\u{201C}Where is she?\u{201D}\n(pointing to Adèle). The room fell quiet.",
+            vec![
+                "\u{201C}Where is she?\u{201D} (pointing to Adèle).",
+                "The room fell quiet.",
+            ],
+        ),
+        (
+            "\u{201C}Then, what induced you to take charge of such a little doll as that?\u{201D}\n(pointing to Adèle). \u{201C}Where did you pick her up?\u{201D}",
+            vec![
+                "\u{201C}Then, what induced you to take charge of such a little doll as that?\u{201D} (pointing to Adèle).",
+                "\u{201C}Where did you pick her up?\u{201D}",
+            ],
+        ),
+    ];
+
+    for (text, expected) in cases {
+        let actual: Vec<_> = detector
+            .detect_sentences_borrowed(text)
+            .unwrap()
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn dialog_close_blank_line_remains_a_hard_boundary() {
+    let detector = get_detector();
+    for text in [
+        "He asked, \u{201C}Are you ready?\u{201D}\n\nShe opened the door.",
+        "He asked, \u{201C}Are you ready?\u{201D}\r\n\r\nShe opened the door.",
+    ] {
+        let sentences = detector.detect_sentences_borrowed(text).unwrap();
+        let actual: Vec<_> = sentences
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+
+        assert_eq!(
+            actual,
+            vec![
+                "He asked, \u{201C}Are you ready?\u{201D}",
+                "She opened the door.",
+            ]
+        );
+        assert!(sentences[1].raw_content.starts_with("She"));
+    }
+}
+
+#[test]
+fn embedded_dialog_may_continue_into_ambiguous_standalone_i_clause() {
+    let detector = get_detector();
+    for (open, close) in [("\u{201C}", "\u{201D}"), ("\"", "\"")] {
+        let text = format!(
+            "To her hurried\n{open}Is it really you?{close}\nI answered by taking her hand. Then we went inside."
+        );
+        let actual: Vec<_> = detector
+            .detect_sentences_borrowed(&text)
+            .unwrap()
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+
+        assert_eq!(
+            actual,
+            vec![
+                format!(
+                    "To her hurried {open}Is it really you?{close} I answered by taking her hand."
+                ),
+                "Then we went inside.".to_string(),
+            ]
+        );
+    }
+}
+
+#[test]
+fn capitalized_dialog_followup_still_splits() {
+    let detector = get_detector();
+    let cases = [
+        "The other drawings pleased her, but she called that \u{201C}an ugly man.\u{201D}\nThey both seemed surprised at my skill.",
+        "He called that \u{201C}wrong.\u{201D} I went home.",
+        "He called that \u{201C}wrong.\u{201D}\nI went home.",
+        "He asked,\n\u{201C}Are you ready?\u{201D}\nI went home.",
+    ];
+
+    for text in cases {
+        let actual: Vec<_> = detector
+            .detect_sentences_borrowed(text)
+            .unwrap()
+            .iter()
+            .map(|sentence| sentence.normalize().trim().to_string())
+            .collect();
+        assert_eq!(actual.len(), 2, "capitalized follow-up should split: {actual:?}");
     }
 }
 
