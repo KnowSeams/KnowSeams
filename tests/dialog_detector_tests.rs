@@ -13,6 +13,46 @@ fn get_detector() -> &'static SentenceDetectorDialog {
     SHARED_DETECTOR.get_or_init(|| SentenceDetectorDialog::new().unwrap())
 }
 
+#[test]
+fn test_adjacent_dialog_transitions_preserve_every_matched_scalar() {
+    let detector = get_detector();
+    let cases = [
+        (
+            "The clerk marked the first entry [closed.][Further entries followed.] The list ended.",
+            [
+                "The clerk marked the first entry [closed.]",
+                "[Further entries followed.]",
+                "The list ended.",
+            ],
+        ),
+        (
+            "The witness added (quietly.)(Contrary evidence remained.) The hearing continued.",
+            [
+                "The witness added (quietly.)",
+                "(Contrary evidence remained.)",
+                "The hearing continued.",
+            ],
+        ),
+        (
+            "The editor printed the note [complete.]\u{201C}Then the account resumed.\u{201D} The chapter ended.",
+            [
+                "The editor printed the note [complete.]",
+                "\u{201C}Then the account resumed.\u{201D}",
+                "The chapter ended.",
+            ],
+        ),
+    ];
+
+    for (input, expected) in cases {
+        let sentences = detector.detect_sentences_borrowed(input).unwrap();
+        let actual = sentences
+            .iter()
+            .map(|sentence| sentence.raw_content.trim())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected, "adjacent transition lost or reassigned source text");
+    }
+}
+
 // fn get_detector2() -> &'static SentenceDetectorDialog2 {
 //     SHARED_DETECTOR2.get_or_init(|| SentenceDetectorDialog2::new().unwrap())
 // }  // Disabled

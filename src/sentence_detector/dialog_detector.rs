@@ -828,6 +828,15 @@ impl DialogStateMachine {
                     .find(|&i| text.is_char_boundary(i))
                     .unwrap_or(text.len());
                 let seam_text = text[safe_start..safe_end].to_string();
+
+                let adjacent_dialog_opener_offset = if matches!(
+                    (&match_type, &next_state),
+                    (MatchType::DialogEnd, DialogState::Unknown)
+                ) {
+                    Self::find_adjacent_dialog_opener_boundary(matched_text)
+                } else {
+                    None
+                };
                 
                 
                 // Handle special cases for hard separator and Dialog->Dialog transitions
@@ -1003,7 +1012,8 @@ impl DialogStateMachine {
                     MatchType::DialogEnd => {
                         // Dialog end creates a sentence boundary
                         // Use separator logic to find where current sentence ends
-                        let sentence_end_byte = self.find_sent_sep_start(matched_text)
+                        let sentence_end_byte = adjacent_dialog_opener_offset
+                            .or_else(|| self.find_sent_sep_start(matched_text))
                             .map(|sep_offset| match_start_byte.advance(sep_offset))
                             .unwrap_or(match_start_byte);
                         
@@ -1027,7 +1037,8 @@ impl DialogStateMachine {
                             }
                         }
                         
-                        let next_sentence_start_byte = self.find_sent_sep_end(matched_text)
+                        let next_sentence_start_byte = adjacent_dialog_opener_offset
+                            .or_else(|| self.find_sent_sep_end(matched_text))
                             .map(|sep_end_offset| match_start_byte.advance(sep_end_offset))
                             .unwrap_or(match_end_byte);
                         
@@ -1169,6 +1180,24 @@ impl DialogStateMachine {
                 | ')' | ']' | '}' | '>'
                 | '\u{00BB}' | '\u{203A}'
         )
+    }
+
+    fn is_opening_delimiter(ch: char) -> bool {
+        matches!(
+            ch,
+            '"' | '\''
+                | '(' | '[' | '{' | '<'
+                | '\u{201C}' | '\u{2018}'
+                | '\u{00AB}' | '\u{2039}'
+        )
+    }
+
+    fn find_adjacent_dialog_opener_boundary(matched_boundary: &str) -> Option<usize> {
+        let mut chars = matched_boundary.char_indices();
+        let (_, close) = chars.next()?;
+        let (open_offset, open) = chars.next()?;
+        (Self::is_closing_delimiter(close) && Self::is_opening_delimiter(open))
+            .then_some(open_offset)
     }
 
     fn next_non_whitespace_char(text: &str) -> Option<(usize, char)> {
